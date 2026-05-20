@@ -5,6 +5,7 @@ import javax.swing.table.*;
 import javax.swing.border.*;
 import java.awt.*;
 import java.awt.event.*;
+import com.votingsystem.gui.MainForm;
 
 public class AdminDashboard extends JFrame {
 
