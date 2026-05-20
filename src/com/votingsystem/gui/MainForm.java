@@ -7,53 +7,36 @@ import java.awt.event.*;
 
 public class MainForm extends JFrame {
 
-    // ═══════════════════════════════════════════
-    //  COLORS & FONTS (Matching AdminDashboard)
-    // ═══════════════════════════════════════════
-    private static final Color DARK_BG     = new Color(30, 30, 47);
-    private static final Color PANEL_BG    = new Color(44, 44, 64);
-    private static final Color BUTTON_BLUE = new Color(70, 130, 255);
-    private static final Color BTN_GREEN   = new Color(50, 200, 120);
-    private static final Color BTN_RED     = new Color(220, 70, 70);
-    private static final Color BTN_CYAN    = new Color(50, 200, 220);
-    private static final Color TEXT_WHITE  = new Color(230, 230, 255);
-    private static final Color TEXT_GRAY   = new Color(150, 150, 180);
+    private static final Color DARK_BG  = new Color(30, 30, 47);
+    private static final Color PANEL_BG = new Color(44, 44, 64);
+    private static final Color BTN_GREEN = new Color(50, 200, 120);
+    private static final Color BTN_RED   = new Color(220, 70, 70);
+    private static final Color BTN_CYAN  = new Color(50, 200, 220);
+    private static final Color TEXT_WHITE = new Color(230, 230, 255);
+    private static final Color TEXT_GRAY  = new Color(150, 150, 180);
 
     private static final Font FONT_TITLE  = new Font("Segoe UI", Font.BOLD, 28);
     private static final Font FONT_LABEL  = new Font("Segoe UI", Font.BOLD, 14);
     private static final Font FONT_NORMAL = new Font("Segoe UI", Font.PLAIN, 14);
 
-    // ═══════════════════════════════════════════
-    //  UI COMPONENTS
-    // ═══════════════════════════════════════════
     private JTextField txtUsername;
     private JPasswordField txtPassword;
     private JComboBox<String> comboRole;
 
-    // ═══════════════════════════════════════════
-    //  CONSTRUCTOR
-    // ═══════════════════════════════════════════
     public MainForm() {
         setTitle("Online Voting System - Login");
         setSize(450, 550);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setLocationRelativeTo(null); // Centers window on screen
+        setLocationRelativeTo(null);
         setResizable(false);
-
-        // Main layout setup
         setLayout(new BorderLayout());
         getContentPane().setBackground(DARK_BG);
-
         add(buildHeader(), BorderLayout.NORTH);
         add(buildLoginForm(), BorderLayout.CENTER);
         add(buildFooter(), BorderLayout.SOUTH);
-
         setVisible(true);
     }
 
-    // ═══════════════════════════════════════════
-    //  1. HEADER
-    // ═══════════════════════════════════════════
     private JPanel buildHeader() {
         JPanel header = new JPanel(new GridLayout(2, 1, 0, 5));
         header.setBackground(DARK_BG);
@@ -69,27 +52,21 @@ public class MainForm extends JFrame {
 
         header.add(lblTitle);
         header.add(lblSub);
-
         return header;
     }
 
-    // ═══════════════════════════════════════════
-    //  2. LOGIN FORM (CENTER)
-    // ═══════════════════════════════════════════
     private JPanel buildLoginForm() {
-        // Create a card-like panel for the inputs
         JPanel formPanel = new JPanel();
         formPanel.setLayout(new BoxLayout(formPanel, BoxLayout.Y_AXIS));
         formPanel.setBackground(PANEL_BG);
         formPanel.setBorder(BorderFactory.createCompoundBorder(
-                new EmptyBorder(10, 40, 10, 40), // Outer margin against the frame
+                new EmptyBorder(10, 40, 10, 40),
                 BorderFactory.createCompoundBorder(
                         BorderFactory.createLineBorder(new Color(60, 60, 80), 1),
-                        new EmptyBorder(30, 30, 30, 30) // Inner padding
+                        new EmptyBorder(30, 30, 30, 30)
                 )
         ));
 
-        // --- Role Selection ---
         formPanel.add(createLabel("Select Role:"));
         formPanel.add(Box.createVerticalStrut(5));
         comboRole = new JComboBox<>(new String[]{"Administrator", "Voter"});
@@ -97,7 +74,6 @@ public class MainForm extends JFrame {
         formPanel.add(comboRole);
         formPanel.add(Box.createVerticalStrut(20));
 
-        // --- Username ---
         formPanel.add(createLabel("Username / CNIC:"));
         formPanel.add(Box.createVerticalStrut(5));
         txtUsername = new JTextField();
@@ -105,7 +81,6 @@ public class MainForm extends JFrame {
         formPanel.add(txtUsername);
         formPanel.add(Box.createVerticalStrut(20));
 
-        // --- Password ---
         formPanel.add(createLabel("Password / PIN:"));
         formPanel.add(Box.createVerticalStrut(5));
         txtPassword = new JPasswordField();
@@ -113,36 +88,27 @@ public class MainForm extends JFrame {
         formPanel.add(txtPassword);
         formPanel.add(Box.createVerticalStrut(30));
 
-        // --- Action Buttons ---
         JPanel btnPanel = new JPanel(new GridLayout(1, 2, 15, 0));
         btnPanel.setBackground(PANEL_BG);
-
-        // Constrain the button panel width so it aligns cleanly with the centered text fields
         btnPanel.setMaximumSize(new Dimension(250, 40));
         btnPanel.setAlignmentX(Component.CENTER_ALIGNMENT);
 
         JButton btnLogin = createButton("Login", BTN_GREEN);
-        JButton btnExit = createButton("Exit", BTN_RED);
+        JButton btnExit  = createButton("Exit",  BTN_RED);
 
         btnLogin.addActionListener(e -> doLogin());
         btnExit.addActionListener(e -> System.exit(0));
 
         btnPanel.add(btnLogin);
         btnPanel.add(btnExit);
-
         formPanel.add(btnPanel);
 
-        // Wrap the formPanel in a container with DARK_BG so it looks centered
         JPanel wrapper = new JPanel(new BorderLayout());
         wrapper.setBackground(DARK_BG);
         wrapper.add(formPanel, BorderLayout.CENTER);
-
         return wrapper;
     }
 
-    // ═══════════════════════════════════════════
-    //  3. FOOTER
-    // ═══════════════════════════════════════════
     private JPanel buildFooter() {
         JPanel footer = new JPanel(new FlowLayout(FlowLayout.CENTER));
         footer.setBackground(DARK_BG);
@@ -156,40 +122,60 @@ public class MainForm extends JFrame {
         return footer;
     }
 
-    // ═══════════════════════════════════════════
-    //  ACTIONS & LOGIC
-    // ═══════════════════════════════════════════
     private void doLogin() {
-        String role = (String) comboRole.getSelectedItem();
+        String role     = (String) comboRole.getSelectedItem();
         String username = txtUsername.getText().trim();
         String password = new String(txtPassword.getPassword());
 
-        // Basic Validation
         if (username.isEmpty() || password.isEmpty()) {
             showError("Please enter both username and password.");
             return;
         }
 
-        // TODO: Replace this hardcoded logic with Database Authentication
-        if (role.equals("Administrator")) {
-            if (username.equals("admin") && password.equals("12345")) {
-                // Successful Admin Login
-                JOptionPane.showMessageDialog(this, "Welcome, Admin!", "Login Success", JOptionPane.INFORMATION_MESSAGE);
-                dispose(); // Close main form
-                new AdminDashboard(); // Open Admin Dashboard
-            } else {
-                showError("Invalid Administrator credentials.");
-            }
+        java.sql.Connection conn = com.votingsystem.database.DBConnection.getConnection();
+
+        if (conn == null) {
+            showError("Database connection failed.");
+            return;
         }
-        else if (role.equals("Voter")) {
-            if (username.equals("voter") && password.equals("12345")) {
-                // Successful Voter Login
-                JOptionPane.showMessageDialog(this, "Welcome, Voter!", "Login Success", JOptionPane.INFORMATION_MESSAGE);
-                dispose();
-                // new VoterDashboard(); // TODO: Create and call the VoterDashboard here
-            } else {
-                showError("Invalid Voter credentials.");
+
+        try {
+            if (role.equals("Administrator")) {
+                String sql = "SELECT * FROM users WHERE cnic=? AND password=? AND role='admin' AND is_verified=TRUE";
+                java.sql.PreparedStatement ps = conn.prepareStatement(sql);
+                ps.setString(1, username);
+                ps.setString(2, password);
+                java.sql.ResultSet rs = ps.executeQuery();
+
+                if (rs.next()) {
+                    String name = rs.getString("full_name");
+                    JOptionPane.showMessageDialog(this, "Welcome, " + name + "!", "Login Success", JOptionPane.INFORMATION_MESSAGE);
+                    dispose();
+                    new AdminDashboard();
+                } else {
+                    showError("Invalid Administrator credentials.");
+                }
+
+            } else if (role.equals("Voter")) {
+                String sql = "SELECT * FROM users WHERE cnic=? AND password=? AND role='voter' AND is_verified=TRUE";
+                java.sql.PreparedStatement ps = conn.prepareStatement(sql);
+                ps.setString(1, username);
+                ps.setString(2, password);
+                java.sql.ResultSet rs = ps.executeQuery();
+
+                if (rs.next()) {
+                    String name = rs.getString("full_name");
+                    JOptionPane.showMessageDialog(this, "Welcome, " + name + "!", "Login Success", JOptionPane.INFORMATION_MESSAGE);
+                    dispose();
+                    new UserDashboard(name);
+                } else {
+                    showError("Invalid Voter credentials or account not verified.");
+                }
             }
+
+        } catch (java.sql.SQLException e) {
+            e.printStackTrace();
+            showError("Database error: " + e.getMessage());
         }
     }
 
@@ -197,14 +183,10 @@ public class MainForm extends JFrame {
         JOptionPane.showMessageDialog(this, msg, "Authentication Error", JOptionPane.ERROR_MESSAGE);
     }
 
-    // ═══════════════════════════════════════════
-    //  UI STYLING HELPERS (DRY Principle)
-    // ═══════════════════════════════════════════
     private JLabel createLabel(String text) {
         JLabel lbl = new JLabel(text);
         lbl.setFont(FONT_LABEL);
         lbl.setForeground(TEXT_WHITE);
-        // Changed to Center alignment
         lbl.setAlignmentX(Component.CENTER_ALIGNMENT);
         return lbl;
     }
@@ -214,14 +196,12 @@ public class MainForm extends JFrame {
         field.setForeground(TEXT_WHITE);
         field.setBackground(DARK_BG);
         field.setCaretColor(TEXT_WHITE);
-        // Constrained maximum width to force centering
         field.setMaximumSize(new Dimension(250, 35));
         field.setPreferredSize(new Dimension(250, 35));
         field.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createLineBorder(BTN_CYAN, 1),
                 new EmptyBorder(5, 10, 5, 10)
         ));
-        // Centered the box itself and the text inside it
         field.setAlignmentX(Component.CENTER_ALIGNMENT);
         field.setHorizontalAlignment(JTextField.CENTER);
     }
@@ -229,10 +209,8 @@ public class MainForm extends JFrame {
     private void styleComboBox(JComboBox<String> box) {
         box.setFont(FONT_NORMAL);
         box.setForeground(Color.BLACK);
-        // Constrained maximum width to force centering
         box.setMaximumSize(new Dimension(250, 35));
         box.setPreferredSize(new Dimension(250, 35));
-        // Centered the box itself and the text inside it
         box.setAlignmentX(Component.CENTER_ALIGNMENT);
         ((JLabel)box.getRenderer()).setHorizontalAlignment(SwingConstants.CENTER);
     }
@@ -240,7 +218,6 @@ public class MainForm extends JFrame {
     private JButton createButton(String text, Color color) {
         JButton btn = new JButton(text);
         btn.setFont(FONT_LABEL);
-        // Changed text color to BLACK for high visibility against green/red backgrounds
         btn.setForeground(Color.BLACK);
         btn.setBackground(color);
         btn.setFocusPainted(false);
@@ -249,8 +226,6 @@ public class MainForm extends JFrame {
                 new EmptyBorder(10, 15, 10, 15)
         ));
         btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
-
-        // Hover Effect
         btn.addMouseListener(new MouseAdapter() {
             public void mouseEntered(MouseEvent e) { btn.setBackground(color.brighter()); }
             public void mouseExited(MouseEvent e)  { btn.setBackground(color); }
@@ -258,16 +233,12 @@ public class MainForm extends JFrame {
         return btn;
     }
 
-    // ═══════════════════════════════════════════
-    //  ENTRY POINT
-    // ═══════════════════════════════════════════
     public static void main(String[] args) {
         try {
             UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
         } catch (Exception e) {
             e.printStackTrace();
         }
-
         SwingUtilities.invokeLater(MainForm::new);
     }
 }
