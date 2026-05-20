@@ -4,12 +4,10 @@ import javax.swing.*;
 import javax.swing.border.*;
 import java.awt.*;
 import java.awt.event.*;
+import java.sql.*;
 
 public class UserRegisteration extends JFrame {
 
-    // ═══════════════════════════════════════════
-    //  COLORS & FONTS  (same as all other forms)
-    // ═══════════════════════════════════════════
     private static final Color DARK_BG    = new Color(30, 30, 47);
     private static final Color PANEL_BG   = new Color(44, 44, 64);
     private static final Color BTN_BLUE   = new Color(70, 130, 255);
@@ -25,9 +23,6 @@ public class UserRegisteration extends JFrame {
     private static final Font FONT_NORMAL = new Font("Segoe UI", Font.PLAIN, 13);
     private static final Font FONT_SMALL  = new Font("Segoe UI", Font.PLAIN, 11);
 
-    // ═══════════════════════════════════════════
-    //  COMPONENTS
-    // ═══════════════════════════════════════════
     private JTextField     nameField;
     private JTextField     cnicField;
     private JTextField     areaField;
@@ -35,9 +30,6 @@ public class UserRegisteration extends JFrame {
     private JPasswordField confirmPassField;
     private JLabel         statusLabel;
 
-    // ═══════════════════════════════════════════
-    //  CONSTRUCTOR
-    // ═══════════════════════════════════════════
     public UserRegisteration() {
         setTitle("User Registration - Online Voting System");
         setSize(480, 660);
@@ -48,16 +40,13 @@ public class UserRegisteration extends JFrame {
         getContentPane().setBackground(DARK_BG);
         setLayout(new BorderLayout());
 
-        add(buildTopBar(),        BorderLayout.NORTH);
-        add(buildRegisterCard(),  BorderLayout.CENTER);
-        add(buildBottomBar(),     BorderLayout.SOUTH);
+        add(buildTopBar(),       BorderLayout.NORTH);
+        add(buildRegisterCard(), BorderLayout.CENTER);
+        add(buildBottomBar(),    BorderLayout.SOUTH);
 
         setVisible(true);
     }
 
-    // ═══════════════════════════════════════════
-    //  1. TOP BAR
-    // ═══════════════════════════════════════════
     private JPanel buildTopBar() {
         JPanel bar = new JPanel(new FlowLayout(FlowLayout.CENTER));
         bar.setBackground(PANEL_BG);
@@ -71,15 +60,10 @@ public class UserRegisteration extends JFrame {
         return bar;
     }
 
-    // ═══════════════════════════════════════════
-    //  2. REGISTRATION CARD
-    //     Icon + Title + All Fields + Buttons
-    // ═══════════════════════════════════════════
     private JPanel buildRegisterCard() {
         JPanel wrapper = new JPanel(new GridBagLayout());
         wrapper.setBackground(DARK_BG);
 
-        // Card panel
         JPanel card = new JPanel();
         card.setBackground(PANEL_BG);
         card.setLayout(new BoxLayout(card, BoxLayout.Y_AXIS));
@@ -89,102 +73,83 @@ public class UserRegisteration extends JFrame {
         ));
         card.setPreferredSize(new Dimension(390, 560));
 
-        // ── Icon
         JLabel icon = new JLabel("📋", SwingConstants.CENTER);
         icon.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 42));
         icon.setAlignmentX(Component.CENTER_ALIGNMENT);
 
-        // ── Title
         JLabel title = new JLabel("Create Account", SwingConstants.CENTER);
         title.setFont(FONT_TITLE);
         title.setForeground(BTN_BLUE);
         title.setAlignmentX(Component.CENTER_ALIGNMENT);
 
-        // ── Subtitle
         JLabel subtitle = new JLabel("Fill all fields to register as a voter", SwingConstants.CENTER);
         subtitle.setFont(FONT_SMALL);
         subtitle.setForeground(TEXT_GRAY);
         subtitle.setAlignmentX(Component.CENTER_ALIGNMENT);
 
-        // ── Full Name Field
-        nameField = buildField();
-        JLabel nameLabel = buildLabel("Full Name");
+        nameField    = buildField();
+        JLabel nameLabel    = buildLabel("Full Name");
 
-        // ── CNIC Field
-        cnicField = buildField();
-        JLabel cnicLabel = buildLabel("CNIC (13 digits, no dashes)");
+        cnicField    = buildField();
+        JLabel cnicLabel    = buildLabel("CNIC (13 digits, no dashes)");
 
-        // ── Area Field
-        areaField = buildField();
-        JLabel areaLabel = buildLabel("Area / City");
+        areaField    = buildField();
+        JLabel areaLabel    = buildLabel("Area / City");
 
-        // ── Password Field
         passwordField = new JPasswordField();
         stylePasswordField(passwordField);
         JLabel passLabel = buildLabel("Password");
 
-        // ── Confirm Password Field
         confirmPassField = new JPasswordField();
         stylePasswordField(confirmPassField);
         JLabel confirmLabel = buildLabel("Confirm Password");
 
-        // ── Status Label
         statusLabel = new JLabel(" ", SwingConstants.CENTER);
         statusLabel.setFont(FONT_SMALL);
         statusLabel.setForeground(BTN_RED);
         statusLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
 
-        // ── Register Button
         JButton btnRegister = createButton("Register", BTN_GREEN);
         btnRegister.setAlignmentX(Component.CENTER_ALIGNMENT);
         btnRegister.setMaximumSize(new Dimension(Integer.MAX_VALUE, 42));
         btnRegister.addActionListener(e -> doRegister());
 
-        // ── Already have account button
         JButton btnLogin = createButton("Already have account? Login", BTN_CYAN);
         btnLogin.setAlignmentX(Component.CENTER_ALIGNMENT);
         btnLogin.setMaximumSize(new Dimension(Integer.MAX_VALUE, 38));
         btnLogin.addActionListener(e -> goToLogin());
 
-        // ── Back Button
         JButton btnBack = createButton("Back to Main Menu", BTN_RED);
         btnBack.setAlignmentX(Component.CENTER_ALIGNMENT);
         btnBack.setMaximumSize(new Dimension(Integer.MAX_VALUE, 38));
         btnBack.addActionListener(e -> goBack());
 
-        // ── Add everything to card
         card.add(icon);
         card.add(Box.createVerticalStrut(6));
         card.add(title);
         card.add(Box.createVerticalStrut(4));
         card.add(subtitle);
         card.add(Box.createVerticalStrut(18));
-
         card.add(nameLabel);
         card.add(Box.createVerticalStrut(5));
         card.add(nameField);
         card.add(Box.createVerticalStrut(12));
-
         card.add(cnicLabel);
         card.add(Box.createVerticalStrut(5));
         card.add(cnicField);
         card.add(Box.createVerticalStrut(12));
-
         card.add(areaLabel);
         card.add(Box.createVerticalStrut(5));
         card.add(areaField);
         card.add(Box.createVerticalStrut(12));
-
         card.add(passLabel);
         card.add(Box.createVerticalStrut(5));
         card.add(passwordField);
         card.add(Box.createVerticalStrut(12));
-
         card.add(confirmLabel);
         card.add(Box.createVerticalStrut(5));
         card.add(confirmPassField);
         card.add(Box.createVerticalStrut(10));
-
         card.add(statusLabel);
         card.add(Box.createVerticalStrut(10));
         card.add(btnRegister);
@@ -197,9 +162,6 @@ public class UserRegisteration extends JFrame {
         return wrapper;
     }
 
-    // ═══════════════════════════════════════════
-    //  3. BOTTOM BAR
-    // ═══════════════════════════════════════════
     private JPanel buildBottomBar() {
         JPanel bar = new JPanel(new FlowLayout(FlowLayout.CENTER));
         bar.setBackground(PANEL_BG);
@@ -213,25 +175,19 @@ public class UserRegisteration extends JFrame {
         return bar;
     }
 
-    // ═══════════════════════════════════════════
-    //  ACTION — REGISTER
-    // ═══════════════════════════════════════════
     private void doRegister() {
-        // Get all field values
         String name        = nameField.getText().trim();
         String cnic        = cnicField.getText().trim();
         String area        = areaField.getText().trim();
         String password    = new String(passwordField.getPassword()).trim();
         String confirmPass = new String(confirmPassField.getPassword()).trim();
 
-        // ── Step 1: Check no field is empty
         if (name.isEmpty() || cnic.isEmpty() || area.isEmpty()
                 || password.isEmpty() || confirmPass.isEmpty()) {
             setStatus("All fields are required.", BTN_RED);
             return;
         }
 
-        // ── Step 2: Validate CNIC — must be exactly 13 digits
         if (!cnic.matches("\\d{13}")) {
             setStatus("CNIC must be exactly 13 digits.", BTN_RED);
             cnicField.setBorder(BorderFactory.createCompoundBorder(
@@ -241,59 +197,75 @@ public class UserRegisteration extends JFrame {
             return;
         }
 
-        // ── Step 3: Check passwords match
         if (!password.equals(confirmPass)) {
             setStatus("Passwords do not match.", BTN_RED);
             confirmPassField.setText("");
             return;
         }
 
-        // ── Step 4: Check password length
         if (password.length() < 6) {
             setStatus("Password must be at least 6 characters.", BTN_RED);
             return;
         }
 
-        // ── Step 5: All valid — Registration successful
-        setStatus("Registered successfully!", BTN_GREEN);
+        Connection conn = com.votingsystem.database.DBConnection.getConnection();
 
-        JOptionPane.showMessageDialog(this,
-                "Registration successful!\n\n"
-                        + "Name:  " + name + "\n"
-                        + "CNIC:  " + cnic + "\n"
-                        + "Area:  " + area + "\n\n"
-                        + "Please wait for admin to verify your account\n"
-                        + "before you can login and vote.",
-                "Registration Successful",
-                JOptionPane.INFORMATION_MESSAGE
-        );
+        if (conn == null) {
+            setStatus("Database connection failed.", BTN_RED);
+            return;
+        }
 
-        // Go to login after successful registration
-        dispose();
-        new UserLogin();
+        try {
+            String checkSql = "SELECT id FROM users WHERE cnic=?";
+            PreparedStatement checkPs = conn.prepareStatement(checkSql);
+            checkPs.setString(1, cnic);
+            ResultSet checkRs = checkPs.executeQuery();
+
+            if (checkRs.next()) {
+                setStatus("This CNIC is already registered.", BTN_RED);
+                return;
+            }
+
+            String sql = "INSERT INTO users (full_name, cnic, area, password, role, is_verified) VALUES (?, ?, ?, ?, 'voter', FALSE)";
+            PreparedStatement ps = conn.prepareStatement(sql);
+            ps.setString(1, name);
+            ps.setString(2, cnic);
+            ps.setString(3, area);
+            ps.setString(4, password);
+            ps.executeUpdate();
+
+            setStatus("Registered successfully!", BTN_GREEN);
+
+            JOptionPane.showMessageDialog(this,
+                    "Registration successful!\n\n"
+                            + "Name:  " + name + "\n"
+                            + "CNIC:  " + cnic + "\n"
+                            + "Area:  " + area + "\n\n"
+                            + "Please wait for admin to verify your account\n"
+                            + "before you can login and vote.",
+                    "Registration Successful",
+                    JOptionPane.INFORMATION_MESSAGE
+            );
+
+            dispose();
+            new UserLogin();
+
+        } catch (SQLException e) {
+            e.printStackTrace();
+            setStatus("Database error: " + e.getMessage(), BTN_RED);
+        }
     }
 
-    // ═══════════════════════════════════════════
-    //  NAVIGATION
-    // ═══════════════════════════════════════════
-
-    // Go to UserLogin
     private void goToLogin() {
         dispose();
         new UserLogin();
     }
 
-    // Go back to MainForm
     private void goBack() {
         dispose();
         new MainForm();
     }
 
-    // ═══════════════════════════════════════════
-    //  HELPER METHODS
-    // ═══════════════════════════════════════════
-
-    // Build a styled label
     private JLabel buildLabel(String text) {
         JLabel lbl = new JLabel(text);
         lbl.setFont(FONT_LABEL);
@@ -302,7 +274,6 @@ public class UserRegisteration extends JFrame {
         return lbl;
     }
 
-    // Build a styled text field
     private JTextField buildField() {
         JTextField field = new JTextField();
         field.setFont(FONT_NORMAL);
@@ -317,7 +288,6 @@ public class UserRegisteration extends JFrame {
         return field;
     }
 
-    // Style a password field (same look as text field)
     private void stylePasswordField(JPasswordField field) {
         field.setFont(FONT_NORMAL);
         field.setForeground(TEXT_WHITE);
@@ -330,15 +300,11 @@ public class UserRegisteration extends JFrame {
         ));
     }
 
-    // Update status label
     private void setStatus(String msg, Color color) {
         statusLabel.setText(msg);
         statusLabel.setForeground(color);
     }
 
-    // ═══════════════════════════════════════════
-    //  BUTTON FACTORY  (same as all other forms)
-    // ═══════════════════════════════════════════
     private JButton createButton(String text, Color color) {
         JButton btn = new JButton(text);
         btn.setFont(FONT_LABEL);
@@ -357,9 +323,6 @@ public class UserRegisteration extends JFrame {
         return btn;
     }
 
-    // ═══════════════════════════════════════════
-    //  MAIN  (test this form standalone)
-    // ═══════════════════════════════════════════
     public static void main(String[] args) {
         SwingUtilities.invokeLater(UserRegisteration::new);
     }
