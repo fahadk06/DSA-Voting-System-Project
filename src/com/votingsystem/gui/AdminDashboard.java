@@ -5,7 +5,10 @@ import javax.swing.table.*;
 import javax.swing.border.*;
 import java.awt.*;
 import java.awt.event.*;
-import com.votingsystem.gui.MainForm;
+import java.sql.*;
+import com.votingsystem.dsa.BinarySearch;
+import com.votingsystem.dsa.CandidateLinkedList;
+import com.votingsystem.dsa.VoteSorter;
 
 public class AdminDashboard extends JFrame {
 
@@ -30,30 +33,26 @@ public class AdminDashboard extends JFrame {
     private static final Font FONT_NORMAL = new Font("Segoe UI", Font.PLAIN, 12);
 
     // ═══════════════════════════════════════════
-    //  CANDIDATE DATA  (will connect to DB later)
-    //  Format: {ID, Name, Party, Area, Votes}
+    //  DSA — replaces raw array navigation
     // ═══════════════════════════════════════════
-    private Object[][] candidates = {
-            {1, "Muhammad Ali",  "PTI",  "Rawalpindi", 342},
-            {2, "Sara Ahmed",    "PMLN", "Islamabad",  289},
-            {3, "Zain ul Abdin", "PPP",  "Lahore",     198},
-            {4, "Fatima Khan",   "MQM",  "Karachi",    415},
-            {5, "Omar Sheikh",   "PTI",  "Peshawar",   167},
-            {6, "Ayesha Raza",   "PMLN", "Multan",     231},
-    };
+    private final CandidateLinkedList linkedList = new CandidateLinkedList();
 
     // ═══════════════════════════════════════════
-    //  COMPONENTS (used across methods)
+    //  CANDIDATE DATA  ← loaded from DB
+    // ═══════════════════════════════════════════
+    private Object[][] candidates = {};
+
+    // ═══════════════════════════════════════════
+    //  COMPONENTS
     // ═══════════════════════════════════════════
     private DefaultTableModel tableModel;
-    private JTable table;
-    private JTextField searchField;
-    private JLabel statusLabel;
-    private JLabel lblTotalCandidates;
-    private JLabel lblTotalVotes;
-    private JLabel lblLeader;
+    private JTable            table;
+    private JTextField        searchField;
+    private JLabel            statusLabel;
+    private JLabel            lblTotalCandidates;
+    private JLabel            lblTotalVotes;
+    private JLabel            lblLeader;
 
-    // Linked List index for Prev/Next navigation
     private int currentIndex = 0;
 
     // ═══════════════════════════════════════════
@@ -65,10 +64,10 @@ public class AdminDashboard extends JFrame {
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
         setResizable(true);
-
-        // Main layout: Header on top, content in center, status at bottom
         setLayout(new BorderLayout(0, 0));
         getContentPane().setBackground(DARK_BG);
+
+        loadCandidatesFromDB();   // ← DB first, then build UI
 
         add(buildHeader(),    BorderLayout.NORTH);
         add(buildCenter(),    BorderLayout.CENTER);
@@ -78,21 +77,119 @@ public class AdminDashboard extends JFrame {
     }
 
     // ═══════════════════════════════════════════
-    //  1. HEADER
-    //     - Title on left
-    //     - Search bar on right
+    //  DB — LOAD ALL CANDIDATES
+    //  Fills both candidates[][] and linkedList
+    // ═══════════════════════════════════════════
+    private void loadCandidatesFromDB() {
+        try {
+            Connection conn = com.votingsystem.database.DBConnection.getConnection();
+            if (conn == null) return;
+
+            Statement  st = conn.createStatement();
+            ResultSet  rs = st.executeQuery(
+                    "SELECT id, name, party, area, vote_count FROM candidates ORDER BY id");
+
+            java.util.List<Object[]> list = new java.util.ArrayList<>();
+            linkedList.clear();   // ← reset linked list before reload
+
+            while (rs.next()) {
+                int    id    = rs.getInt("id");
+                String name  = rs.getString("name");
+                String party = rs.getString("party");
+                String area  = rs.getString("area");
+                int    votes = rs.getInt("vote_count");
+
+                list.add(new Object[]{id, name, party, area, votes});
+                linkedList.add(id, name, party, area, votes); // ← DSA linked list
+            }
+            candidates = list.toArray(new Object[0][]);
+
+        } catch (SQLException e) {
+            e.printStackTrace();
+            candidates = new Object[][]{};
+        }
+    }
+
+    // ═══════════════════════════════════════════
+    //  DB — ADD CANDIDATE
+    // ═══════════════════════════════════════════
+    private boolean dbAddCandidate(String name, String party, String area) {
+        try {
+            Connection conn = com.votingsystem.database.DBConnection.getConnection();
+            if (conn == null) return false;
+
+            PreparedStatement ps = conn.prepareStatement(
+                    "INSERT INTO candidates (name, party, area, vote_count) VALUES (?, ?, ?, 0)");
+            ps.setString(1, name);
+            ps.setString(2, party);
+            ps.setString(3, area);
+            ps.executeUpdate();
+            return true;
+
+        } catch (SQLException e) {
+            e.printStackTrace();
+            showError("DB error: " + e.getMessage());
+            return false;
+        }
+    }
+
+    // ═══════════════════════════════════════════
+    //  DB — UPDATE CANDIDATE
+    // ═══════════════════════════════════════════
+    private boolean dbUpdateCandidate(int id, String name, String party, String area) {
+        try {
+            Connection conn = com.votingsystem.database.DBConnection.getConnection();
+            if (conn == null) return false;
+
+            PreparedStatement ps = conn.prepareStatement(
+                    "UPDATE candidates SET name=?, party=?, area=? WHERE id=?");
+            ps.setString(1, name);
+            ps.setString(2, party);
+            ps.setString(3, area);
+            ps.setInt(4, id);
+            ps.executeUpdate();
+            return true;
+
+        } catch (SQLException e) {
+            e.printStackTrace();
+            showError("DB error: " + e.getMessage());
+            return false;
+        }
+    }
+
+    // ═══════════════════════════════════════════
+    //  DB — REMOVE CANDIDATE
+    // ═══════════════════════════════════════════
+    private boolean dbRemoveCandidate(int id) {
+        try {
+            Connection conn = com.votingsystem.database.DBConnection.getConnection();
+            if (conn == null) return false;
+
+            PreparedStatement ps = conn.prepareStatement(
+                    "DELETE FROM candidates WHERE id=?");
+            ps.setInt(1, id);
+            ps.executeUpdate();
+            return true;
+
+        } catch (SQLException e) {
+            e.printStackTrace();
+            showError("DB error: " + e.getMessage());
+            return false;
+        }
+    }
+
+    // ═══════════════════════════════════════════
+    //  1. HEADER  (unchanged)
     // ═══════════════════════════════════════════
     private JPanel buildHeader() {
         JPanel header = new JPanel(new BorderLayout());
         header.setBackground(PANEL_BG);
         header.setBorder(new EmptyBorder(15, 25, 15, 25));
 
-        // Left: Title
         JLabel title = new JLabel("Admin Dashboard");
         title.setFont(FONT_TITLE);
         title.setForeground(BTN_CYAN);
 
-        // Right: Search field + buttons
         JPanel searchArea = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
         searchArea.setBackground(PANEL_BG);
 
@@ -107,8 +204,7 @@ public class AdminDashboard extends JFrame {
         searchField.setCaretColor(TEXT_WHITE);
         searchField.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createLineBorder(BTN_CYAN, 1),
-                new EmptyBorder(5, 8, 5, 8)
-        ));
+                new EmptyBorder(5, 8, 5, 8)));
 
         JButton btnSearch = createButton("Search",   BUTTON_BLUE);
         JButton btnReset  = createButton("Show All", BTN_CYAN);
@@ -131,33 +227,26 @@ public class AdminDashboard extends JFrame {
     }
 
     // ═══════════════════════════════════════════
-    //  2. CENTER AREA
-    //     - Stats row on top
-    //     - Table in middle
-    //     - Action buttons at bottom
+    //  2. CENTER  (unchanged)
     // ═══════════════════════════════════════════
     private JPanel buildCenter() {
         JPanel center = new JPanel(new BorderLayout(0, 12));
         center.setBackground(DARK_BG);
         center.setBorder(new EmptyBorder(15, 20, 15, 20));
-
         center.add(buildStatsRow(),  BorderLayout.NORTH);
         center.add(buildTable(),     BorderLayout.CENTER);
         center.add(buildButtonRow(), BorderLayout.SOUTH);
-
         return center;
     }
 
     // ═══════════════════════════════════════════
-    //  3. STATS ROW
-    //     Three cards: Total Candidates, Total Votes, Leader
+    //  3. STATS ROW  (unchanged)
     // ═══════════════════════════════════════════
     private JPanel buildStatsRow() {
         JPanel row = new JPanel(new GridLayout(1, 3, 15, 0));
         row.setBackground(DARK_BG);
         row.setPreferredSize(new Dimension(0, 90));
 
-        // Labels stored so we can update them after add/remove
         lblTotalCandidates = new JLabel(String.valueOf(candidates.length));
         lblTotalVotes      = new JLabel(String.valueOf(calcTotalVotes()));
         lblLeader          = new JLabel(calcLeader());
@@ -165,18 +254,15 @@ public class AdminDashboard extends JFrame {
         row.add(buildStatCard("Total Candidates",  lblTotalCandidates, BTN_CYAN));
         row.add(buildStatCard("Total Votes",       lblTotalVotes,      BTN_GREEN));
         row.add(buildStatCard("Leading Candidate", lblLeader,          BTN_YELLOW));
-
         return row;
     }
 
-    // Single stat card
     private JPanel buildStatCard(String title, JLabel valueLabel, Color color) {
         JPanel card = new JPanel(new BorderLayout(0, 4));
         card.setBackground(PANEL_BG);
         card.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createLineBorder(color, 2),
-                new EmptyBorder(12, 18, 12, 18)
-        ));
+                new EmptyBorder(12, 18, 12, 18)));
 
         JLabel titleLbl = new JLabel(title);
         titleLbl.setFont(FONT_NORMAL);
@@ -191,21 +277,18 @@ public class AdminDashboard extends JFrame {
     }
 
     // ═══════════════════════════════════════════
-    //  4. TABLE
-    //     Columns: ID | Name | Party | Area | Votes | Progress
+    //  4. TABLE  (unchanged)
     // ═══════════════════════════════════════════
     private JScrollPane buildTable() {
         String[] columns = {"ID", "Name", "Party", "Area", "Votes", "Vote Progress"};
 
-        // isCellEditable = false makes table read-only
         tableModel = new DefaultTableModel(columns, 0) {
             public boolean isCellEditable(int r, int c) { return false; }
         };
 
-        refreshTable(); // load candidates into table
+        refreshTable();
 
         table = new JTable(tableModel) {
-            // Alternate row colors
             @Override
             public Component prepareRenderer(TableCellRenderer r, int row, int col) {
                 Component c = super.prepareRenderer(r, row, col);
@@ -227,14 +310,12 @@ public class AdminDashboard extends JFrame {
         table.setSelectionBackground(ROW_SELECT);
         table.getTableHeader().setReorderingAllowed(false);
 
-        // Header styling
         JTableHeader header = table.getTableHeader();
         header.setFont(FONT_LABEL);
         header.setBackground(PANEL_BG);
         header.setForeground(TEXT_GRAY);
         header.setPreferredSize(new Dimension(0, 38));
 
-        // Column widths
         table.getColumnModel().getColumn(0).setPreferredWidth(40);
         table.getColumnModel().getColumn(1).setPreferredWidth(160);
         table.getColumnModel().getColumn(2).setPreferredWidth(90);
@@ -242,13 +323,10 @@ public class AdminDashboard extends JFrame {
         table.getColumnModel().getColumn(4).setPreferredWidth(60);
         table.getColumnModel().getColumn(5).setPreferredWidth(180);
 
-        // Center-align ID and Votes columns
         DefaultTableCellRenderer centerAlign = new DefaultTableCellRenderer();
         centerAlign.setHorizontalAlignment(SwingConstants.CENTER);
         table.getColumnModel().getColumn(0).setCellRenderer(centerAlign);
         table.getColumnModel().getColumn(4).setCellRenderer(centerAlign);
-
-        // Custom progress bar for last column
         table.getColumnModel().getColumn(5).setCellRenderer(new ProgressBarRenderer());
 
         JScrollPane scroll = new JScrollPane(table);
@@ -259,8 +337,7 @@ public class AdminDashboard extends JFrame {
     }
 
     // ═══════════════════════════════════════════
-    //  5. BUTTON ROW
-    //     Add | Update | Remove | Prev | Next | Logout
+    //  5. BUTTON ROW  (unchanged)
     // ═══════════════════════════════════════════
     private JPanel buildButtonRow() {
         JPanel btnRow = new JPanel(new FlowLayout(FlowLayout.CENTER, 12, 5));
@@ -288,12 +365,11 @@ public class AdminDashboard extends JFrame {
         btnRow.add(btnNext);
         btnRow.add(Box.createHorizontalStrut(20));
         btnRow.add(btnLogout);
-
         return btnRow;
     }
 
     // ═══════════════════════════════════════════
-    //  6. STATUS BAR
+    //  6. STATUS BAR  (unchanged)
     // ═══════════════════════════════════════════
     private JPanel buildStatusBar() {
         JPanel bar = new JPanel(new BorderLayout());
@@ -314,17 +390,14 @@ public class AdminDashboard extends JFrame {
     }
 
     // ═══════════════════════════════════════════
-    //  ACTIONS
+    //  ADD  ← saves to DB, reloads linked list
     // ═══════════════════════════════════════════
-
-    // ADD
     private void doAdd() {
         JTextField fName  = new JTextField(15);
         JTextField fParty = new JTextField(15);
         JTextField fArea  = new JTextField(15);
 
         Object[] fields = {"Name:", fName, "Party:", fParty, "Area:", fArea};
-
         int result = JOptionPane.showConfirmDialog(this, fields,
                 "Add New Candidate", JOptionPane.OK_CANCEL_OPTION);
 
@@ -337,19 +410,18 @@ public class AdminDashboard extends JFrame {
                 showError("Please fill all fields."); return;
             }
 
-            // Expand array by 1 and add new candidate
-            Object[][] newArr = new Object[candidates.length + 1][5];
-            System.arraycopy(candidates, 0, newArr, 0, candidates.length);
-            newArr[candidates.length] = new Object[]{candidates.length + 1, name, party, area, 0};
-            candidates = newArr;
-
-            refreshTable();
-            refreshStats();
-            setStatus("Candidate '" + name + "' added.", BTN_GREEN);
+            if (dbAddCandidate(name, party, area)) {
+                loadCandidatesFromDB();   // reload array + linked list from DB
+                refreshTable();
+                refreshStats();
+                setStatus("Candidate '" + name + "' added.", BTN_GREEN);
+            }
         }
     }
 
-    // UPDATE
+    // ═══════════════════════════════════════════
+    //  UPDATE  ← saves to DB, reloads linked list
+    // ═══════════════════════════════════════════
     private void doUpdate() {
         int row = table.getSelectedRow();
         if (row < 0) { showError("Select a candidate to update."); return; }
@@ -359,21 +431,27 @@ public class AdminDashboard extends JFrame {
         JTextField fArea  = new JTextField((String) candidates[row][3], 15);
 
         Object[] fields = {"Name:", fName, "Party:", fParty, "Area:", fArea};
-
         int result = JOptionPane.showConfirmDialog(this, fields,
                 "Update Candidate", JOptionPane.OK_CANCEL_OPTION);
 
         if (result == JOptionPane.OK_OPTION) {
-            candidates[row][1] = fName.getText().trim();
-            candidates[row][2] = fParty.getText().trim();
-            candidates[row][3] = fArea.getText().trim();
-            refreshTable();
-            refreshStats();
-            setStatus("Candidate updated.", BTN_YELLOW);
+            int    id    = (int) candidates[row][0];
+            String name  = fName.getText().trim();
+            String party = fParty.getText().trim();
+            String area  = fArea.getText().trim();
+
+            if (dbUpdateCandidate(id, name, party, area)) {
+                loadCandidatesFromDB();   // reload array + linked list from DB
+                refreshTable();
+                refreshStats();
+                setStatus("Candidate updated.", BTN_YELLOW);
+            }
         }
     }
 
-    // REMOVE
+    // ═══════════════════════════════════════════
+    //  REMOVE  ← deletes from DB, reloads linked list
+    // ═══════════════════════════════════════════
     private void doRemove() {
         int row = table.getSelectedRow();
         if (row < 0) { showError("Select a candidate to remove."); return; }
@@ -383,63 +461,67 @@ public class AdminDashboard extends JFrame {
                 "Remove '" + name + "'?", "Confirm", JOptionPane.YES_NO_OPTION);
 
         if (confirm == JOptionPane.YES_OPTION) {
-            // Shrink array by 1, skipping removed row
-            Object[][] newArr = new Object[candidates.length - 1][5];
-            int i = 0;
-            for (int j = 0; j < candidates.length; j++) {
-                if (j != row) newArr[i++] = candidates[j];
+            int id = (int) candidates[row][0];
+
+            if (dbRemoveCandidate(id)) {
+                loadCandidatesFromDB();   // reload array + linked list from DB
+                currentIndex = 0;         // reset navigation after removal
+                refreshTable();
+                refreshStats();
+                setStatus("'" + name + "' removed.", BTN_RED);
             }
-            candidates = newArr;
-            refreshTable();
-            refreshStats();
-            setStatus("'" + name + "' removed.", BTN_RED);
         }
     }
 
-    // SEARCH (by name, party, or area)
+    // ═══════════════════════════════════════════
+    //  SEARCH  ← uses BinarySearch DSA class
+    // ═══════════════════════════════════════════
     private void doSearch() {
         String query = searchField.getText().trim().toLowerCase();
         if (query.isEmpty()) { refreshTable(); return; }
 
+        // ← DSA: BinarySearch handles name (binary) + area (linear fallback)
+        Object[][] results = BinarySearch.search(candidates, query);
+
         tableModel.setRowCount(0);
-        int maxV  = calcMaxVotes();
-        int found = 0;
+        int maxV = calcMaxVotes();
 
-        for (Object[] c : candidates) {
-            boolean match =
-                    ((String) c[1]).toLowerCase().contains(query) ||
-                            ((String) c[2]).toLowerCase().contains(query) ||
-                            ((String) c[3]).toLowerCase().contains(query);
-
-            if (match) {
-                int pct = maxV > 0 ? (int) c[4] * 100 / maxV : 0;
-                tableModel.addRow(new Object[]{c[0], c[1], c[2], c[3], c[4], pct});
-                found++;
-            }
+        for (Object[] c : results) {
+            int pct = maxV > 0 ? (int) c[4] * 100 / maxV : 0;
+            tableModel.addRow(new Object[]{c[0], c[1], c[2], c[3], c[4], pct});
         }
-        setStatus("Found " + found + " result(s) for '" + query + "'",
-                found > 0 ? BTN_CYAN : BTN_RED);
+
+        setStatus("Found " + results.length + " result(s) for '" + query + "'",
+                results.length > 0 ? BTN_CYAN : BTN_RED);
     }
 
-    // PREV — Linked List navigation going backward
+    // ═══════════════════════════════════════════
+    //  PREV  ← uses CandidateLinkedList DSA class
+    // ═══════════════════════════════════════════
     private void doPrev() {
-        if (candidates.length == 0) return;
-        currentIndex = (currentIndex - 1 + candidates.length) % candidates.length;
+        if (linkedList.size() == 0) return;
+        // ← DSA: circular prev index from linked list
+        currentIndex = linkedList.prevIndex(currentIndex);
         selectRow(currentIndex);
         setStatus("Previous: " + candidates[currentIndex][1]
-                + "  (" + (currentIndex + 1) + " / " + candidates.length + ")", BTN_CYAN);
+                + "  (" + (currentIndex + 1) + " / " + linkedList.size() + ")", BTN_CYAN);
     }
 
-    // NEXT — Linked List navigation going forward
+    // ═══════════════════════════════════════════
+    //  NEXT  ← uses CandidateLinkedList DSA class
+    // ═══════════════════════════════════════════
     private void doNext() {
-        if (candidates.length == 0) return;
-        currentIndex = (currentIndex + 1) % candidates.length;
+        if (linkedList.size() == 0) return;
+        // ← DSA: circular next index from linked list
+        currentIndex = linkedList.nextIndex(currentIndex);
         selectRow(currentIndex);
         setStatus("Next: " + candidates[currentIndex][1]
-                + "  (" + (currentIndex + 1) + " / " + candidates.length + ")", BTN_CYAN);
+                + "  (" + (currentIndex + 1) + " / " + linkedList.size() + ")", BTN_CYAN);
     }
 
-    // LOGOUT
+    // ═══════════════════════════════════════════
+    //  LOGOUT
+    // ═══════════════════════════════════════════
     private void doLogout() {
         int confirm = JOptionPane.showConfirmDialog(this,
                 "Logout and return to main menu?", "Logout", JOptionPane.YES_NO_OPTION);
@@ -450,10 +532,39 @@ public class AdminDashboard extends JFrame {
     }
 
     // ═══════════════════════════════════════════
-    //  HELPER METHODS
+    //  VIEW RESULTS  ← uses VoteSorter DSA class
+    //  (bonus: same pattern as UserDashboard)
     // ═══════════════════════════════════════════
+    private void doViewResults() {
+        Object[][] sorted = copyCandidates();
+        VoteSorter.bubbleSort(sorted);   // ← DSA: bubble sort descending
 
-    // Reload all rows in the table from candidates array
+        StringBuilder sb = new StringBuilder();
+        sb.append("=== VOTE RESULTS (Sorted by Votes) ===\n\n");
+        for (int i = 0; i < sorted.length; i++) {
+            sb.append((i + 1)).append(".  ")
+                    .append(sorted[i][1]).append("  (").append(sorted[i][2]).append(")")
+                    .append("  -  ").append(sorted[i][4]).append(" votes");
+            if (i == 0) sb.append("  ← LEADING");
+            sb.append("\n");
+        }
+
+        JTextArea textArea = new JTextArea(sb.toString());
+        textArea.setFont(new Font("Consolas", Font.PLAIN, 13));
+        textArea.setEditable(false);
+        textArea.setBackground(PANEL_BG);
+        textArea.setForeground(TEXT_WHITE);
+        textArea.setBorder(new EmptyBorder(10, 10, 10, 10));
+
+        JScrollPane scroll = new JScrollPane(textArea);
+        scroll.setPreferredSize(new Dimension(420, 280));
+        JOptionPane.showMessageDialog(this, scroll,
+                "Election Results", JOptionPane.PLAIN_MESSAGE);
+    }
+
+    // ═══════════════════════════════════════════
+    //  HELPERS
+    // ═══════════════════════════════════════════
     private void refreshTable() {
         tableModel.setRowCount(0);
         int maxV = calcMaxVotes();
@@ -463,45 +574,38 @@ public class AdminDashboard extends JFrame {
         }
     }
 
-    // Update the 3 stat cards
     private void refreshStats() {
         lblTotalCandidates.setText(String.valueOf(candidates.length));
         lblTotalVotes.setText(String.valueOf(calcTotalVotes()));
         lblLeader.setText(calcLeader());
     }
 
-    // Highlight and scroll to a specific row
     private void selectRow(int index) {
         table.setRowSelectionInterval(index, index);
         table.scrollRectToVisible(table.getCellRect(index, 0, true));
     }
 
-    // Update status bar
     private void setStatus(String msg, Color color) {
         statusLabel.setText(msg);
         statusLabel.setForeground(color);
     }
 
-    // Show error popup
     private void showError(String msg) {
         JOptionPane.showMessageDialog(this, msg, "Error", JOptionPane.ERROR_MESSAGE);
     }
 
-    // Sum all votes
     private int calcTotalVotes() {
         int total = 0;
         for (Object[] c : candidates) total += (int) c[4];
         return total;
     }
 
-    // Get max votes (for progress bar calculation)
     private int calcMaxVotes() {
         int max = 0;
         for (Object[] c : candidates) max = Math.max(max, (int) c[4]);
         return max;
     }
 
-    // Get name of candidate with most votes
     private String calcLeader() {
         String leader = "None";
         int max = 0;
@@ -511,9 +615,12 @@ public class AdminDashboard extends JFrame {
         return leader;
     }
 
-    // ═══════════════════════════════════════════
-    //  BUTTON FACTORY
-    // ═══════════════════════════════════════════
+    private Object[][] copyCandidates() {
+        Object[][] copy = new Object[candidates.length][5];
+        for (int i = 0; i < candidates.length; i++) copy[i] = candidates[i].clone();
+        return copy;
+    }
+
     private JButton createButton(String text, Color color) {
         JButton btn = new JButton(text);
         btn.setFont(FONT_LABEL);
@@ -522,8 +629,7 @@ public class AdminDashboard extends JFrame {
         btn.setFocusPainted(false);
         btn.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createLineBorder(color.darker(), 1),
-                new EmptyBorder(8, 16, 8, 16)
-        ));
+                new EmptyBorder(8, 16, 8, 16)));
         btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
         btn.addMouseListener(new MouseAdapter() {
             public void mouseEntered(MouseEvent e) { btn.setBackground(color.brighter()); }
@@ -533,11 +639,9 @@ public class AdminDashboard extends JFrame {
     }
 
     // ═══════════════════════════════════════════
-    //  PROGRESS BAR RENDERER
-    //  Used in the "Vote Progress" column
+    //  PROGRESS BAR RENDERER  (unchanged)
     // ═══════════════════════════════════════════
     class ProgressBarRenderer extends JPanel implements TableCellRenderer {
-
         private int percentage = 0;
 
         public ProgressBarRenderer() { setOpaque(true); }
@@ -556,36 +660,33 @@ public class AdminDashboard extends JFrame {
             Graphics2D g2 = (Graphics2D) g.create();
             g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 
-            int pad   = 10;
+            int pad    = 10;
             int trackW = getWidth() - pad * 2;
-            int barH  = 10;
-            int y     = (getHeight() - barH) / 2;
+            int barH   = 10;
+            int y      = (getHeight() - barH) / 2;
 
-            // Background track (gray)
             g2.setColor(new Color(60, 60, 80));
             g2.fillRoundRect(pad, y, trackW, barH, barH, barH);
 
-            // Colored fill based on percentage
-            int fillW     = (int)(trackW * percentage / 100.0);
+            int fillW      = (int)(trackW * percentage / 100.0);
             Color barColor = percentage > 66 ? BTN_GREEN
-                    : percentage > 33 ? BTN_YELLOW
-                      : BTN_RED;
+                    : percentage > 33 ? BTN_YELLOW : BTN_RED;
             g2.setColor(barColor);
             if (fillW > 0) g2.fillRoundRect(pad, y, fillW, barH, barH, barH);
 
-            // Percentage text on right side
             g2.setColor(TEXT_WHITE);
             g2.setFont(new Font("Segoe UI", Font.BOLD, 11));
             String txt = percentage + "%";
             FontMetrics fm = g2.getFontMetrics();
-            g2.drawString(txt, getWidth() - fm.stringWidth(txt) - pad,
+            g2.drawString(txt,
+                    getWidth() - fm.stringWidth(txt) - pad,
                     getHeight() / 2 + fm.getAscent() / 2 - 2);
             g2.dispose();
         }
     }
 
     // ═══════════════════════════════════════════
-    //  MAIN  (run this to test standalone)
+    //  MAIN
     // ═══════════════════════════════════════════
     public static void main(String[] args) {
         SwingUtilities.invokeLater(AdminDashboard::new);
