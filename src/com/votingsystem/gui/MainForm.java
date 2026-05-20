@@ -162,14 +162,15 @@ public class MainForm extends JFrame {
                 ps.setString(1, username);
                 ps.setString(2, password);
                 java.sql.ResultSet rs = ps.executeQuery();
-
                 if (rs.next()) {
-                    String name = rs.getString("full_name");
-                    JOptionPane.showMessageDialog(this, "Welcome, " + name + "!", "Login Success", JOptionPane.INFORMATION_MESSAGE);
+                    int userId     = rs.getInt("id");
+                    String name    = rs.getString("full_name");
+                    boolean voted  = rs.getBoolean("has_voted");   // ← fetch has_voted from DB
+
+                    JOptionPane.showMessageDialog(this, "Welcome, " + name + "!",
+                            "Login Success", JOptionPane.INFORMATION_MESSAGE);
                     dispose();
-                    new UserDashboard(name);
-                } else {
-                    showError("Invalid Voter credentials or account not verified.");
+                    new UserDashboard(userId, name, voted);   // ← pass all 3 correct args
                 }
             }
 
