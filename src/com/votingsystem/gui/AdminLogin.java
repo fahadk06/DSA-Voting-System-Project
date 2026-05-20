@@ -4,12 +4,10 @@ import javax.swing.*;
 import javax.swing.border.*;
 import java.awt.*;
 import java.awt.event.*;
+import java.sql.*;
 
 public class AdminLogin extends JFrame {
 
-    // ═══════════════════════════════════════════
-    //  COLORS & FONTS  (same as all other forms)
-    // ═══════════════════════════════════════════
     private static final Color DARK_BG    = new Color(30, 30, 47);
     private static final Color PANEL_BG   = new Color(44, 44, 64);
     private static final Color BTN_GREEN  = new Color(50, 200, 120);
@@ -25,25 +23,10 @@ public class AdminLogin extends JFrame {
     private static final Font FONT_NORMAL = new Font("Segoe UI", Font.PLAIN, 13);
     private static final Font FONT_SMALL  = new Font("Segoe UI", Font.PLAIN, 11);
 
-    // ═══════════════════════════════════════════
-    //  COMPONENTS
-    // ═══════════════════════════════════════════
     private JTextField     emailField;
     private JPasswordField passwordField;
     private JLabel         statusLabel;
 
-    // ═══════════════════════════════════════════
-    //  DUMMY ADMIN DATA  (will connect to DB later)
-    //  Format: {Email, Password, Name}
-    // ═══════════════════════════════════════════
-    private static final String[][] ADMINS = {
-            {"admin@voting.com", "admin123", "Super Admin"},
-            {"manager@voting.com", "manager456", "Manager"},
-    };
-
-    // ═══════════════════════════════════════════
-    //  CONSTRUCTOR
-    // ═══════════════════════════════════════════
     public AdminLogin() {
         setTitle("Admin Login - Online Voting System");
         setSize(480, 540);
@@ -61,9 +44,6 @@ public class AdminLogin extends JFrame {
         setVisible(true);
     }
 
-    // ═══════════════════════════════════════════
-    //  1. TOP BAR
-    // ═══════════════════════════════════════════
     private JPanel buildTopBar() {
         JPanel bar = new JPanel(new FlowLayout(FlowLayout.CENTER));
         bar.setBackground(PANEL_BG);
@@ -77,9 +57,6 @@ public class AdminLogin extends JFrame {
         return bar;
     }
 
-    // ═══════════════════════════════════════════
-    //  2. LOGIN CARD
-    // ═══════════════════════════════════════════
     private JPanel buildLoginCard() {
         JPanel wrapper = new JPanel(new GridBagLayout());
         wrapper.setBackground(DARK_BG);
@@ -93,25 +70,21 @@ public class AdminLogin extends JFrame {
         ));
         card.setPreferredSize(new Dimension(380, 400));
 
-        // ── Icon
         JLabel icon = new JLabel("🛡", SwingConstants.CENTER);
         icon.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 48));
         icon.setAlignmentX(Component.CENTER_ALIGNMENT);
 
-        // ── Title
         JLabel title = new JLabel("Admin Login", SwingConstants.CENTER);
         title.setFont(FONT_TITLE);
         title.setForeground(BTN_YELLOW);
         title.setAlignmentX(Component.CENTER_ALIGNMENT);
 
-        // ── Subtitle
-        JLabel subtitle = new JLabel("Enter your email and password", SwingConstants.CENTER);
+        JLabel subtitle = new JLabel("Enter your CNIC and password", SwingConstants.CENTER);
         subtitle.setFont(FONT_SMALL);
         subtitle.setForeground(TEXT_GRAY);
         subtitle.setAlignmentX(Component.CENTER_ALIGNMENT);
 
-        // ── Email Field
-        JLabel emailLabel = new JLabel("Email Address");
+        JLabel emailLabel = new JLabel("CNIC");
         emailLabel.setFont(FONT_LABEL);
         emailLabel.setForeground(TEXT_GRAY);
         emailLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
@@ -127,7 +100,6 @@ public class AdminLogin extends JFrame {
                 new EmptyBorder(6, 10, 6, 10)
         ));
 
-        // ── Password Field
         JLabel passLabel = new JLabel("Password");
         passLabel.setFont(FONT_LABEL);
         passLabel.setForeground(TEXT_GRAY);
@@ -144,28 +116,23 @@ public class AdminLogin extends JFrame {
                 new EmptyBorder(6, 10, 6, 10)
         ));
 
-        // Press Enter to login
         passwordField.addActionListener(e -> doLogin());
 
-        // ── Status Label
         statusLabel = new JLabel(" ", SwingConstants.CENTER);
         statusLabel.setFont(FONT_SMALL);
         statusLabel.setForeground(BTN_RED);
         statusLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
 
-        // ── Login Button
         JButton btnLogin = createButton("Login", BTN_YELLOW);
         btnLogin.setAlignmentX(Component.CENTER_ALIGNMENT);
         btnLogin.setMaximumSize(new Dimension(Integer.MAX_VALUE, 42));
         btnLogin.addActionListener(e -> doLogin());
 
-        // ── Back Button
         JButton btnBack = createButton("Back to Main Menu", BTN_RED);
         btnBack.setAlignmentX(Component.CENTER_ALIGNMENT);
         btnBack.setMaximumSize(new Dimension(Integer.MAX_VALUE, 38));
         btnBack.addActionListener(e -> goBack());
 
-        // ── Assemble card
         card.add(icon);
         card.add(Box.createVerticalStrut(8));
         card.add(title);
@@ -190,9 +157,6 @@ public class AdminLogin extends JFrame {
         return wrapper;
     }
 
-    // ═══════════════════════════════════════════
-    //  3. BOTTOM BAR
-    // ═══════════════════════════════════════════
     private JPanel buildBottomBar() {
         JPanel bar = new JPanel(new FlowLayout(FlowLayout.CENTER));
         bar.setBackground(PANEL_BG);
@@ -206,59 +170,58 @@ public class AdminLogin extends JFrame {
         return bar;
     }
 
-    // ═══════════════════════════════════════════
-    //  ACTIONS
-    // ═══════════════════════════════════════════
-
-    // LOGIN — check email + password
     private void doLogin() {
-        String email    = emailField.getText().trim();
+        String cnic     = emailField.getText().trim();
         String password = new String(passwordField.getPassword()).trim();
 
-        // Empty field check
-        if (email.isEmpty() || password.isEmpty()) {
-            setStatus("Please enter email and password.", BTN_RED);
+        if (cnic.isEmpty() || password.isEmpty()) {
+            setStatus("Please enter CNIC and password.", BTN_RED);
             return;
         }
 
-        // Search for admin in ADMINS array
-        for (String[] admin : ADMINS) {
-            if (admin[0].equals(email) && admin[1].equals(password)) {
+        Connection conn = com.votingsystem.database.DBConnection.getConnection();
 
-                // Match found — open AdminDashboard
-                setStatus("Login successful! Welcome, " + admin[2], BTN_GREEN);
-                JOptionPane.showMessageDialog(this,
-                        "Welcome, " + admin[2] + "!\nRedirecting to dashboard...",
-                        "Login Successful", JOptionPane.INFORMATION_MESSAGE);
-
-                dispose();
-                new AdminDashboard();
-                return;
-            }
+        if (conn == null) {
+            setStatus("Database connection failed.", BTN_RED);
+            return;
         }
 
-        // No match found
-        setStatus("Invalid email or password.", BTN_RED);
-        passwordField.setText("");
+        try {
+            String sql = "SELECT * FROM users WHERE cnic=? AND password=? AND role='admin' AND is_verified=TRUE";
+            PreparedStatement ps = conn.prepareStatement(sql);
+            ps.setString(1, cnic);
+            ps.setString(2, password);
+            ResultSet rs = ps.executeQuery();
+
+            if (rs.next()) {
+                String name = rs.getString("full_name");
+                setStatus("Welcome, " + name + "!", BTN_GREEN);
+                JOptionPane.showMessageDialog(this,
+                        "Welcome, " + name + "!",
+                        "Login Successful", JOptionPane.INFORMATION_MESSAGE);
+                dispose();
+                new AdminDashboard();
+            } else {
+                setStatus("Invalid CNIC or password.", BTN_RED);
+                passwordField.setText("");
+            }
+
+        } catch (SQLException e) {
+            e.printStackTrace();
+            setStatus("Database error: " + e.getMessage(), BTN_RED);
+        }
     }
 
-    // GO BACK — return to MainForm
     private void goBack() {
         dispose();
         new MainForm();
     }
 
-    // ═══════════════════════════════════════════
-    //  HELPER METHODS
-    // ═══════════════════════════════════════════
     private void setStatus(String msg, Color color) {
         statusLabel.setText(msg);
         statusLabel.setForeground(color);
     }
 
-    // ═══════════════════════════════════════════
-    //  BUTTON FACTORY  (same as all other forms)
-    // ═══════════════════════════════════════════
     private JButton createButton(String text, Color color) {
         JButton btn = new JButton(text);
         btn.setFont(FONT_LABEL);
@@ -277,9 +240,6 @@ public class AdminLogin extends JFrame {
         return btn;
     }
 
-    // ═══════════════════════════════════════════
-    //  MAIN  (test this form standalone)
-    // ═══════════════════════════════════════════
     public static void main(String[] args) {
         SwingUtilities.invokeLater(AdminLogin::new);
     }
