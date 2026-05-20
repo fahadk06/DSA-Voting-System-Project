@@ -4,12 +4,10 @@ import javax.swing.*;
 import javax.swing.border.*;
 import java.awt.*;
 import java.awt.event.*;
+import java.sql.*;
 
 public class UserLogin extends JFrame {
 
-    // ═══════════════════════════════════════════
-    //  COLORS & FONTS  (same as all other forms)
-    // ═══════════════════════════════════════════
     private static final Color DARK_BG    = new Color(30, 30, 47);
     private static final Color PANEL_BG   = new Color(44, 44, 64);
     private static final Color BTN_GREEN  = new Color(50, 200, 120);
@@ -24,28 +22,10 @@ public class UserLogin extends JFrame {
     private static final Font FONT_NORMAL = new Font("Segoe UI", Font.PLAIN, 13);
     private static final Font FONT_SMALL  = new Font("Segoe UI", Font.PLAIN, 11);
 
-    // ═══════════════════════════════════════════
-    //  COMPONENTS
-    // ═══════════════════════════════════════════
     private JTextField     cnicField;
     private JPasswordField passwordField;
     private JLabel         statusLabel;
 
-    // ═══════════════════════════════════════════
-    //  DUMMY USER DATA  (will connect to DB later)
-    //  Format: CNIC → Password
-    //  In real app this comes from database
-    // ═══════════════════════════════════════════
-    private static final String[][] USERS = {
-            {"3740512345671", "fahad123",  "Muhammad Fahad", "true"},  // verified
-            {"3740598765432", "hamza456",  "Ameer Hamza",    "true"},  // verified
-            {"3740511111111", "ahmad789",  "Ahmad Minhal",   "false"}, // not verified yet
-    };
-    // Columns: 0=CNIC, 1=Password, 2=Name, 3=isVerified
-
-    // ═══════════════════════════════════════════
-    //  CONSTRUCTOR
-    // ═══════════════════════════════════════════
     public UserLogin() {
         setTitle("User Login - Online Voting System");
         setSize(480, 560);
@@ -53,7 +33,6 @@ public class UserLogin extends JFrame {
         setLocationRelativeTo(null);
         setResizable(false);
 
-        // Dark background for whole window
         getContentPane().setBackground(DARK_BG);
         setLayout(new BorderLayout());
 
@@ -66,7 +45,6 @@ public class UserLogin extends JFrame {
 
     // ═══════════════════════════════════════════
     //  1. TOP BAR
-    //     System name at the very top
     // ═══════════════════════════════════════════
     private JPanel buildTopBar() {
         JPanel bar = new JPanel(new FlowLayout(FlowLayout.CENTER));
@@ -82,14 +60,12 @@ public class UserLogin extends JFrame {
     }
 
     // ═══════════════════════════════════════════
-    //  2. LOGIN CARD  (center piece)
-    //     Icon + Title + Fields + Buttons
+    //  2. LOGIN CARD
     // ═══════════════════════════════════════════
     private JPanel buildLoginCard() {
         JPanel wrapper = new JPanel(new GridBagLayout());
         wrapper.setBackground(DARK_BG);
 
-        // Card panel
         JPanel card = new JPanel();
         card.setBackground(PANEL_BG);
         card.setLayout(new BoxLayout(card, BoxLayout.Y_AXIS));
@@ -99,24 +75,20 @@ public class UserLogin extends JFrame {
         ));
         card.setPreferredSize(new Dimension(380, 420));
 
-        // ── Icon
         JLabel icon = new JLabel("👤", SwingConstants.CENTER);
         icon.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 48));
         icon.setAlignmentX(Component.CENTER_ALIGNMENT);
 
-        // ── Title
         JLabel title = new JLabel("User Login", SwingConstants.CENTER);
         title.setFont(FONT_TITLE);
         title.setForeground(BTN_GREEN);
         title.setAlignmentX(Component.CENTER_ALIGNMENT);
 
-        // ── Subtitle
         JLabel subtitle = new JLabel("Enter your CNIC and password", SwingConstants.CENTER);
         subtitle.setFont(FONT_SMALL);
         subtitle.setForeground(TEXT_GRAY);
         subtitle.setAlignmentX(Component.CENTER_ALIGNMENT);
 
-        // ── CNIC Field
         JLabel cnicLabel = new JLabel("CNIC (without dashes)");
         cnicLabel.setFont(FONT_LABEL);
         cnicLabel.setForeground(TEXT_GRAY);
@@ -133,7 +105,6 @@ public class UserLogin extends JFrame {
                 new EmptyBorder(6, 10, 6, 10)
         ));
 
-        // ── Password Field
         JLabel passLabel = new JLabel("Password");
         passLabel.setFont(FONT_LABEL);
         passLabel.setForeground(TEXT_GRAY);
@@ -150,34 +121,28 @@ public class UserLogin extends JFrame {
                 new EmptyBorder(6, 10, 6, 10)
         ));
 
-        // Press Enter to login
         passwordField.addActionListener(e -> doLogin());
 
-        // ── Status Label (shows error or success)
         statusLabel = new JLabel(" ", SwingConstants.CENTER);
         statusLabel.setFont(FONT_SMALL);
         statusLabel.setForeground(BTN_RED);
         statusLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
 
-        // ── Login Button
         JButton btnLogin = createButton("Login", BTN_GREEN);
         btnLogin.setAlignmentX(Component.CENTER_ALIGNMENT);
         btnLogin.setMaximumSize(new Dimension(Integer.MAX_VALUE, 42));
         btnLogin.addActionListener(e -> doLogin());
 
-        // ── Register Button
         JButton btnRegister = createButton("New User? Register Here", BTN_CYAN);
         btnRegister.setAlignmentX(Component.CENTER_ALIGNMENT);
         btnRegister.setMaximumSize(new Dimension(Integer.MAX_VALUE, 38));
         btnRegister.addActionListener(e -> goToRegister());
 
-        // ── Back Button
         JButton btnBack = createButton("Back to Main Menu", BTN_RED);
         btnBack.setAlignmentX(Component.CENTER_ALIGNMENT);
         btnBack.setMaximumSize(new Dimension(Integer.MAX_VALUE, 38));
         btnBack.addActionListener(e -> goBack());
 
-        // ── Add everything to card
         card.add(icon);
         card.add(Box.createVerticalStrut(8));
         card.add(title);
@@ -221,26 +186,41 @@ public class UserLogin extends JFrame {
     }
 
     // ═══════════════════════════════════════════
-    //  ACTIONS
+    //  DB LOGIN LOGIC  ← only this method changed
     // ═══════════════════════════════════════════
-
-    // LOGIN — check CNIC + password + verified status
     private void doLogin() {
         String cnic     = cnicField.getText().trim();
         String password = new String(passwordField.getPassword()).trim();
 
-        // Empty field check
+        // ── Validation
         if (cnic.isEmpty() || password.isEmpty()) {
             setStatus("Please enter CNIC and password.", BTN_RED);
             return;
         }
 
-        // Search for user in USERS array
-        for (String[] user : USERS) {
-            if (user[0].equals(cnic) && user[1].equals(password)) {
+        // ── DB Connection
+        Connection conn = com.votingsystem.database.DBConnection.getConnection();
+        if (conn == null) {
+            setStatus("Database connection failed.", BTN_RED);
+            return;
+        }
 
-                // Found user — now check if verified by admin
-                if (user[3].equals("false")) {
+        try {
+            // ── Query: match cnic + password + role voter only
+            String sql = "SELECT id, full_name, is_verified, has_voted " +
+                    "FROM users " +
+                    "WHERE cnic = ? AND password = ? AND role = 'voter'";
+
+            PreparedStatement ps = conn.prepareStatement(sql);
+            ps.setString(1, cnic);
+            ps.setString(2, password);
+            ResultSet rs = ps.executeQuery();
+
+            if (rs.next()) {
+                // ── User found — check verified
+                boolean isVerified = rs.getBoolean("is_verified");
+
+                if (!isVerified) {
                     setStatus("Account not verified. Contact admin.", BTN_RED);
                     JOptionPane.showMessageDialog(this,
                             "Your account has not been verified by the admin yet.\n"
@@ -249,48 +229,52 @@ public class UserLogin extends JFrame {
                     return;
                 }
 
-                // Verified — open UserDashboard
-                setStatus("Login successful! Welcome, " + user[2], BTN_GREEN);
+                // ── Verified — read user data and open dashboard
+                int     userId   = rs.getInt("id");
+                String  fullName = rs.getString("full_name");
+                boolean hasVoted = rs.getBoolean("has_voted");
+
+                setStatus("Welcome, " + fullName + "!", BTN_GREEN);
                 JOptionPane.showMessageDialog(this,
-                        "Welcome, " + user[2] + "!\nRedirecting to dashboard...",
+                        "Welcome, " + fullName + "!\nRedirecting to dashboard...",
                         "Login Successful", JOptionPane.INFORMATION_MESSAGE);
 
                 dispose();
-                new UserDashboard(user[2]); // pass name to dashboard
-                return;
-            }
-        }
+                new UserDashboard(userId, fullName, hasVoted); // ← passes all 3 needed values
 
-        // No match found
-        setStatus("Invalid CNIC or password.", BTN_RED);
-        passwordField.setText("");
+            } else {
+                // ── No match
+                setStatus("Invalid CNIC or password.", BTN_RED);
+                passwordField.setText("");
+            }
+
+        } catch (SQLException e) {
+            e.printStackTrace();
+            setStatus("Database error: " + e.getMessage(), BTN_RED);
+        }
     }
 
-    // GO TO REGISTER — open UserRegistration form
+    // ═══════════════════════════════════════════
+    //  NAVIGATION
+    // ═══════════════════════════════════════════
     private void goToRegister() {
         dispose();
         new UserRegisteration();
     }
 
-    // GO BACK — return to MainForm
     private void goBack() {
         dispose();
         new MainForm();
     }
 
     // ═══════════════════════════════════════════
-    //  HELPER METHODS
+    //  HELPERS
     // ═══════════════════════════════════════════
-
-    // Update status label
     private void setStatus(String msg, Color color) {
         statusLabel.setText(msg);
         statusLabel.setForeground(color);
     }
 
-    // ═══════════════════════════════════════════
-    //  BUTTON FACTORY  (same as all other forms)
-    // ═══════════════════════════════════════════
     private JButton createButton(String text, Color color) {
         JButton btn = new JButton(text);
         btn.setFont(FONT_LABEL);
@@ -309,9 +293,6 @@ public class UserLogin extends JFrame {
         return btn;
     }
 
-    // ═══════════════════════════════════════════
-    //  MAIN  (test this form standalone)
-    // ═══════════════════════════════════════════
     public static void main(String[] args) {
         SwingUtilities.invokeLater(UserLogin::new);
     }

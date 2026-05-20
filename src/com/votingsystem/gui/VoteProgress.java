@@ -376,7 +376,7 @@ public class VoteProgress extends JFrame {
         // Back goes to UserDashboard
         btnBack.addActionListener(e -> {
             dispose();
-            new UserDashboard("User");
+            //new UserDashboard("User");
         });
 
         btnPanel.add(btnRefresh);

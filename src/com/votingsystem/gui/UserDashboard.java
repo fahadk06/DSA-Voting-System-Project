@@ -5,11 +5,12 @@ import javax.swing.table.*;
 import javax.swing.border.*;
 import java.awt.*;
 import java.awt.event.*;
+import java.sql.*;
 
 public class UserDashboard extends JFrame {
 
     // ═══════════════════════════════════════════
-    //  COLORS & FONTS  (same as AdminDashboard)
+    //  COLORS & FONTS
     // ═══════════════════════════════════════════
     private static final Color DARK_BG    = new Color(30, 30, 47);
     private static final Color PANEL_BG   = new Color(44, 44, 64);
@@ -29,55 +30,48 @@ public class UserDashboard extends JFrame {
     private static final Font FONT_NORMAL = new Font("Segoe UI", Font.PLAIN, 12);
 
     // ═══════════════════════════════════════════
-    //  CANDIDATE DATA
-    //  Same data shared with AdminDashboard
-    //  Format: {ID, Name, Party, Area, Votes}
+    //  USER INFO
     // ═══════════════════════════════════════════
-    private Object[][] candidates = {
-            {1, "Muhammad Ali",  "PTI",  "Rawalpindi", 342},
-            {2, "Sara Ahmed",    "PMLN", "Islamabad",  289},
-            {3, "Zain ul Abdin", "PPP",  "Lahore",     198},
-            {4, "Fatima Khan",   "MQM",  "Karachi",    415},
-            {5, "Omar Sheikh",   "PTI",  "Peshawar",   167},
-            {6, "Ayesha Raza",   "PMLN", "Multan",     231},
-    };
+    private int     loggedInUserId;
+    private String  loggedInUser;
+    private boolean hasVoted;
 
     // ═══════════════════════════════════════════
-    //  USER INFO  (passed from login screen)
+    //  CANDIDATE DATA  ← loaded from DB
     // ═══════════════════════════════════════════
-    private String loggedInUser;   // voter's name
-    private boolean hasVoted = false; // track if user already voted
+    private Object[][] candidates = {};
 
     // ═══════════════════════════════════════════
     //  COMPONENTS
     // ═══════════════════════════════════════════
     private DefaultTableModel tableModel;
-    private JTable table;
-    private JTextField searchField;
-    private JLabel statusLabel;
-    private JLabel lblTotalCandidates;
-    private JLabel lblTotalVotes;
-    private JLabel lblLeader;
-    private JLabel lblVoteStatus; // shows "Voted" or "Not Voted"
+    private JTable            table;
+    private JTextField        searchField;
+    private JLabel            statusLabel;
+    private JLabel            lblTotalCandidates;
+    private JLabel            lblTotalVotes;
+    private JLabel            lblLeader;
+    private JLabel            lblVoteStatus;
 
-    // Linked List index for Prev/Next navigation
     private int currentIndex = 0;
 
     // ═══════════════════════════════════════════
-    //  CONSTRUCTOR
-    //  Accepts logged-in user's name from UserLogin
+    //  CONSTRUCTOR  ← fixed: 3 params
     // ═══════════════════════════════════════════
-    public UserDashboard(String userName) {
-        this.loggedInUser = userName;
+    public UserDashboard(int userId, String userName, boolean voted) {
+        this.loggedInUserId = userId;
+        this.loggedInUser   = userName;
+        this.hasVoted       = voted;
 
         setTitle("User Dashboard - Online Voting System");
         setSize(1100, 700);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
         setResizable(true);
-
         setLayout(new BorderLayout(0, 0));
         getContentPane().setBackground(DARK_BG);
+
+        loadCandidatesFromDB();   // ← load real data first
 
         add(buildHeader(),    BorderLayout.NORTH);
         add(buildCenter(),    BorderLayout.CENTER);
@@ -87,16 +81,43 @@ public class UserDashboard extends JFrame {
     }
 
     // ═══════════════════════════════════════════
+    //  DB — LOAD CANDIDATES
+    // ═══════════════════════════════════════════
+    private void loadCandidatesFromDB() {
+        try {
+            Connection conn = com.votingsystem.database.DBConnection.getConnection();
+            if (conn == null) return;
+
+            Statement st = conn.createStatement();
+            ResultSet rs = st.executeQuery(
+                    "SELECT id, name, party, area, vote_count FROM candidates ORDER BY id");
+
+            java.util.List<Object[]> list = new java.util.ArrayList<>();
+            while (rs.next()) {
+                list.add(new Object[]{
+                        rs.getInt("id"),
+                        rs.getString("name"),
+                        rs.getString("party"),
+                        rs.getString("area"),
+                        rs.getInt("vote_count")
+                });
+            }
+            candidates = list.toArray(new Object[0][]);
+
+        } catch (SQLException e) {
+            e.printStackTrace();
+            candidates = new Object[][]{};
+        }
+    }
+
+    // ═══════════════════════════════════════════
     //  1. HEADER
-    //     - Title + welcome message on left
-    //     - Search bar on right
     // ═══════════════════════════════════════════
     private JPanel buildHeader() {
         JPanel header = new JPanel(new BorderLayout());
         header.setBackground(PANEL_BG);
         header.setBorder(new EmptyBorder(15, 25, 15, 25));
 
-        // Left side: title + welcome
         JPanel leftSide = new JPanel();
         leftSide.setBackground(PANEL_BG);
         leftSide.setLayout(new BoxLayout(leftSide, BoxLayout.Y_AXIS));
@@ -112,7 +133,6 @@ public class UserDashboard extends JFrame {
         leftSide.add(title);
         leftSide.add(welcome);
 
-        // Right side: search
         JPanel searchArea = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
         searchArea.setBackground(PANEL_BG);
 
@@ -151,10 +171,7 @@ public class UserDashboard extends JFrame {
     }
 
     // ═══════════════════════════════════════════
-    //  2. CENTER AREA
-    //     - Stats on top
-    //     - Table in middle
-    //     - Buttons at bottom
+    //  2. CENTER
     // ═══════════════════════════════════════════
     private JPanel buildCenter() {
         JPanel center = new JPanel(new BorderLayout(0, 12));
@@ -170,7 +187,6 @@ public class UserDashboard extends JFrame {
 
     // ═══════════════════════════════════════════
     //  3. STATS ROW
-    //     Total Candidates | Total Votes | Leader | Your Status
     // ═══════════════════════════════════════════
     private JPanel buildStatsRow() {
         JPanel row = new JPanel(new GridLayout(1, 4, 12, 0));
@@ -180,18 +196,19 @@ public class UserDashboard extends JFrame {
         lblTotalCandidates = new JLabel(String.valueOf(candidates.length));
         lblTotalVotes      = new JLabel(String.valueOf(calcTotalVotes()));
         lblLeader          = new JLabel(calcLeader());
-        lblVoteStatus      = new JLabel("Not Voted");
-        lblVoteStatus.setForeground(BTN_RED); // will turn green after voting
+
+        // ← vote status comes from DB now
+        lblVoteStatus = new JLabel(hasVoted ? "Voted!" : "Not Voted");
+        lblVoteStatus.setForeground(hasVoted ? BTN_GREEN : BTN_RED);
 
         row.add(buildStatCard("Total Candidates",  lblTotalCandidates, BTN_CYAN));
         row.add(buildStatCard("Total Votes Cast",  lblTotalVotes,      BTN_GREEN));
         row.add(buildStatCard("Leading Candidate", lblLeader,          BTN_YELLOW));
-        row.add(buildStatCard("Your Vote Status",  lblVoteStatus,      BTN_RED));
+        row.add(buildStatCard("Your Vote Status",  lblVoteStatus,      hasVoted ? BTN_GREEN : BTN_RED));
 
         return row;
     }
 
-    // Single stat card
     private JPanel buildStatCard(String title, JLabel valueLabel, Color color) {
         JPanel card = new JPanel(new BorderLayout(0, 4));
         card.setBackground(PANEL_BG);
@@ -205,7 +222,6 @@ public class UserDashboard extends JFrame {
         titleLbl.setForeground(TEXT_GRAY);
 
         valueLabel.setFont(new Font("Segoe UI", Font.BOLD, 16));
-        // Note: color set by caller or dynamically (for vote status)
 
         card.add(titleLbl,   BorderLayout.NORTH);
         card.add(valueLabel, BorderLayout.CENTER);
@@ -214,13 +230,12 @@ public class UserDashboard extends JFrame {
 
     // ═══════════════════════════════════════════
     //  4. TABLE
-    //     Columns: ID | Name | Party | Area | Votes | Vote Progress
     // ═══════════════════════════════════════════
     private JScrollPane buildTable() {
         String[] columns = {"ID", "Name", "Party", "Area", "Votes", "Vote Progress"};
 
         tableModel = new DefaultTableModel(columns, 0) {
-            public boolean isCellEditable(int r, int c) { return false; } // read-only for user
+            public boolean isCellEditable(int r, int c) { return false; }
         };
 
         refreshTable();
@@ -247,14 +262,12 @@ public class UserDashboard extends JFrame {
         table.setSelectionBackground(ROW_SELECT);
         table.getTableHeader().setReorderingAllowed(false);
 
-        // Header style
         JTableHeader header = table.getTableHeader();
         header.setFont(FONT_LABEL);
         header.setBackground(PANEL_BG);
         header.setForeground(TEXT_GRAY);
         header.setPreferredSize(new Dimension(0, 38));
 
-        // Column widths
         table.getColumnModel().getColumn(0).setPreferredWidth(40);
         table.getColumnModel().getColumn(1).setPreferredWidth(160);
         table.getColumnModel().getColumn(2).setPreferredWidth(90);
@@ -262,13 +275,10 @@ public class UserDashboard extends JFrame {
         table.getColumnModel().getColumn(4).setPreferredWidth(60);
         table.getColumnModel().getColumn(5).setPreferredWidth(180);
 
-        // Center align ID and Votes
         DefaultTableCellRenderer centerAlign = new DefaultTableCellRenderer();
         centerAlign.setHorizontalAlignment(SwingConstants.CENTER);
         table.getColumnModel().getColumn(0).setCellRenderer(centerAlign);
         table.getColumnModel().getColumn(4).setCellRenderer(centerAlign);
-
-        // Progress bar for vote progress column
         table.getColumnModel().getColumn(5).setCellRenderer(new ProgressBarRenderer());
 
         JScrollPane scroll = new JScrollPane(table);
@@ -280,17 +290,16 @@ public class UserDashboard extends JFrame {
 
     // ═══════════════════════════════════════════
     //  5. BUTTON ROW
-    //     Cast Vote | View Results | Prev | Next | Logout
     // ═══════════════════════════════════════════
     private JPanel buildButtonRow() {
         JPanel btnRow = new JPanel(new FlowLayout(FlowLayout.CENTER, 12, 5));
         btnRow.setBackground(DARK_BG);
 
-        JButton btnVote    = createButton("Cast My Vote",    BTN_GREEN);
-        JButton btnResults = createButton("View Results",    BTN_YELLOW);
-        JButton btnPrev    = createButton("< Previous",      BTN_CYAN);
-        JButton btnNext    = createButton("Next >",          BTN_CYAN);
-        JButton btnLogout  = createButton("Logout",          BTN_RED);
+        JButton btnVote    = createButton("Cast My Vote", BTN_GREEN);
+        JButton btnResults = createButton("View Results", BTN_YELLOW);
+        JButton btnPrev    = createButton("< Previous",   BTN_CYAN);
+        JButton btnNext    = createButton("Next >",       BTN_CYAN);
+        JButton btnLogout  = createButton("Logout",       BTN_RED);
 
         btnVote.addActionListener(e    -> doCastVote());
         btnResults.addActionListener(e -> doViewResults());
@@ -331,84 +340,92 @@ public class UserDashboard extends JFrame {
     }
 
     // ═══════════════════════════════════════════
-    //  ACTIONS
+    //  CAST VOTE  ← saves to DB
     // ═══════════════════════════════════════════
-
-    // CAST VOTE — user selects a row and votes
     private void doCastVote() {
-
-        // Check if user already voted
         if (hasVoted) {
             showError("You have already cast your vote!");
             return;
         }
 
-        // Check if a candidate is selected
         int row = table.getSelectedRow();
         if (row < 0) {
             showError("Please select a candidate to vote for.");
             return;
         }
 
+        int    candidateId   = (int)    candidates[row][0];
         String candidateName = (String) candidates[row][1];
         String party         = (String) candidates[row][2];
 
-        // Confirm vote
         int confirm = JOptionPane.showConfirmDialog(this,
                 "You are voting for:\n\n"
                         + "  Name:  " + candidateName + "\n"
                         + "  Party: " + party + "\n\n"
                         + "Are you sure? This cannot be undone.",
-                "Confirm Vote",
-                JOptionPane.YES_NO_OPTION
-        );
+                "Confirm Vote", JOptionPane.YES_NO_OPTION);
 
         if (confirm == JOptionPane.YES_OPTION) {
-            // Add 1 vote to that candidate
-            candidates[row][4] = (int) candidates[row][4] + 1;
+            try {
+                Connection conn = com.votingsystem.database.DBConnection.getConnection();
+                if (conn == null) { showError("DB connection failed."); return; }
 
-            // Mark user as voted
-            hasVoted = true;
+                // 1. Increment vote_count in candidates
+                PreparedStatement ps1 = conn.prepareStatement(
+                        "UPDATE candidates SET vote_count = vote_count + 1 WHERE id = ?");
+                ps1.setInt(1, candidateId);
+                ps1.executeUpdate();
 
-            // Update table and stats
-            refreshTable();
-            refreshStats();
+                // 2. Mark user has_voted = TRUE
+                PreparedStatement ps2 = conn.prepareStatement(
+                        "UPDATE users SET has_voted = TRUE WHERE id = ?");
+                ps2.setInt(1, loggedInUserId);
+                ps2.executeUpdate();
 
-            // Update vote status card
-            lblVoteStatus.setText("Voted!");
-            lblVoteStatus.setForeground(BTN_GREEN);
+                // 3. Insert record into votes table
+                PreparedStatement ps3 = conn.prepareStatement(
+                        "INSERT INTO votes (user_id, candidate_id) VALUES (?, ?)");
+                ps3.setInt(1, loggedInUserId);
+                ps3.setInt(2, candidateId);
+                ps3.executeUpdate();
 
-            setStatus("Vote cast for " + candidateName + " successfully!", BTN_GREEN);
+                // 4. Update local array + UI
+                candidates[row][4] = (int) candidates[row][4] + 1;
+                hasVoted = true;
 
-            // Show success message
-            JOptionPane.showMessageDialog(this,
-                    "Your vote for " + candidateName + " has been recorded!",
-                    "Vote Successful", JOptionPane.INFORMATION_MESSAGE);
+                refreshTable();
+                refreshStats();
+
+                lblVoteStatus.setText("Voted!");
+                lblVoteStatus.setForeground(BTN_GREEN);
+                setStatus("Vote cast for " + candidateName + " successfully!", BTN_GREEN);
+
+                JOptionPane.showMessageDialog(this,
+                        "Your vote for " + candidateName + " has been recorded!",
+                        "Vote Successful", JOptionPane.INFORMATION_MESSAGE);
+
+            } catch (SQLException e) {
+                e.printStackTrace();
+                showError("Database error: " + e.getMessage());
+            }
         }
     }
 
-    // VIEW RESULTS — shows sorted results in a dialog
+    // ═══════════════════════════════════════════
+    //  VIEW RESULTS
+    // ═══════════════════════════════════════════
     private void doViewResults() {
-        // Sort candidates by votes (Bubble Sort — DSA concept)
         Object[][] sorted = copyCandidates();
         bubbleSortByVotes(sorted);
 
-        // Build result message
         StringBuilder sb = new StringBuilder();
         sb.append("=== VOTE RESULTS (Sorted by Votes) ===\n\n");
 
         for (int i = 0; i < sorted.length; i++) {
-            String rank  = (i + 1) + ".  ";
-            String name  = (String) sorted[i][1];
-            String party = (String) sorted[i][2];
-            int votes    = (int) sorted[i][4];
-
-            sb.append(rank)
-                    .append(name)
-                    .append("  (").append(party).append(")")
-                    .append("  —  ").append(votes).append(" votes");
-
-            if (i == 0) sb.append("  🏆 LEADING");
+            sb.append((i + 1)).append(".  ")
+                    .append(sorted[i][1]).append("  (").append(sorted[i][2]).append(")")
+                    .append("  -  ").append(sorted[i][4]).append(" votes");
+            if (i == 0) sb.append("  LEADING");
             sb.append("\n");
         }
 
@@ -426,7 +443,9 @@ public class UserDashboard extends JFrame {
                 "Election Results", JOptionPane.PLAIN_MESSAGE);
     }
 
-    // PREVIOUS — Linked List navigation going backward
+    // ═══════════════════════════════════════════
+    //  PREV / NEXT  navigation
+    // ═══════════════════════════════════════════
     private void doPrev() {
         if (candidates.length == 0) return;
         currentIndex = (currentIndex - 1 + candidates.length) % candidates.length;
@@ -435,7 +454,6 @@ public class UserDashboard extends JFrame {
                 + "  (" + (currentIndex + 1) + " / " + candidates.length + ")", BTN_CYAN);
     }
 
-    // NEXT — Linked List navigation going forward
     private void doNext() {
         if (candidates.length == 0) return;
         currentIndex = (currentIndex + 1) % candidates.length;
@@ -444,7 +462,6 @@ public class UserDashboard extends JFrame {
                 + "  (" + (currentIndex + 1) + " / " + candidates.length + ")", BTN_CYAN);
     }
 
-    // LOGOUT — go back to MainForm
     private void doLogout() {
         int confirm = JOptionPane.showConfirmDialog(this,
                 "Logout and return to main menu?",
@@ -455,7 +472,9 @@ public class UserDashboard extends JFrame {
         }
     }
 
-    // SEARCH — by name or area (Binary Search concept)
+    // ═══════════════════════════════════════════
+    //  SEARCH
+    // ═══════════════════════════════════════════
     private void doSearch() {
         String query = searchField.getText().trim().toLowerCase();
         if (query.isEmpty()) { refreshTable(); return; }
@@ -466,9 +485,8 @@ public class UserDashboard extends JFrame {
 
         for (Object[] c : candidates) {
             boolean match =
-                    ((String) c[1]).toLowerCase().contains(query) || // name
-                            ((String) c[3]).toLowerCase().contains(query);   // area
-
+                    ((String) c[1]).toLowerCase().contains(query) ||
+                            ((String) c[3]).toLowerCase().contains(query);
             if (match) {
                 int pct = maxV > 0 ? (int) c[4] * 100 / maxV : 0;
                 tableModel.addRow(new Object[]{c[0], c[1], c[2], c[3], c[4], pct});
@@ -480,37 +498,28 @@ public class UserDashboard extends JFrame {
     }
 
     // ═══════════════════════════════════════════
-    //  DSA — BUBBLE SORT by votes (descending)
-    //  Used in View Results
+    //  BUBBLE SORT — DSA (will move to VoteSorter)
     // ═══════════════════════════════════════════
     private void bubbleSortByVotes(Object[][] arr) {
         int n = arr.length;
-        for (int i = 0; i < n - 1; i++) {
-            for (int j = 0; j < n - i - 1; j++) {
+        for (int i = 0; i < n - 1; i++)
+            for (int j = 0; j < n - i - 1; j++)
                 if ((int) arr[j][4] < (int) arr[j + 1][4]) {
-                    // Swap
                     Object[] temp = arr[j];
                     arr[j]        = arr[j + 1];
                     arr[j + 1]    = temp;
                 }
-            }
-        }
     }
 
-    // Deep copy of candidates array (so sorting doesn't affect original)
     private Object[][] copyCandidates() {
         Object[][] copy = new Object[candidates.length][5];
-        for (int i = 0; i < candidates.length; i++) {
-            copy[i] = candidates[i].clone();
-        }
+        for (int i = 0; i < candidates.length; i++) copy[i] = candidates[i].clone();
         return copy;
     }
 
     // ═══════════════════════════════════════════
-    //  HELPER METHODS
+    //  HELPERS
     // ═══════════════════════════════════════════
-
-    // Reload table from candidates array
     private void refreshTable() {
         tableModel.setRowCount(0);
         int maxV = calcMaxVotes();
@@ -520,45 +529,38 @@ public class UserDashboard extends JFrame {
         }
     }
 
-    // Update stat cards
     private void refreshStats() {
         lblTotalCandidates.setText(String.valueOf(candidates.length));
         lblTotalVotes.setText(String.valueOf(calcTotalVotes()));
         lblLeader.setText(calcLeader());
     }
 
-    // Highlight a row in the table
     private void selectRow(int index) {
         table.setRowSelectionInterval(index, index);
         table.scrollRectToVisible(table.getCellRect(index, 0, true));
     }
 
-    // Update status bar text
     private void setStatus(String msg, Color color) {
         statusLabel.setText(msg);
         statusLabel.setForeground(color);
     }
 
-    // Show error popup
     private void showError(String msg) {
         JOptionPane.showMessageDialog(this, msg, "Error", JOptionPane.ERROR_MESSAGE);
     }
 
-    // Sum all votes
     private int calcTotalVotes() {
         int total = 0;
         for (Object[] c : candidates) total += (int) c[4];
         return total;
     }
 
-    // Get max votes (used for progress bar %)
     private int calcMaxVotes() {
         int max = 0;
         for (Object[] c : candidates) max = Math.max(max, (int) c[4]);
         return max;
     }
 
-    // Get name of leading candidate
     private String calcLeader() {
         String leader = "None";
         int max = 0;
@@ -568,9 +570,6 @@ public class UserDashboard extends JFrame {
         return leader;
     }
 
-    // ═══════════════════════════════════════════
-    //  BUTTON FACTORY  (same style as AdminDashboard)
-    // ═══════════════════════════════════════════
     private JButton createButton(String text, Color color) {
         JButton btn = new JButton(text);
         btn.setFont(FONT_LABEL);
@@ -591,10 +590,8 @@ public class UserDashboard extends JFrame {
 
     // ═══════════════════════════════════════════
     //  PROGRESS BAR RENDERER
-    //  (same as AdminDashboard for consistency)
     // ═══════════════════════════════════════════
     class ProgressBarRenderer extends JPanel implements TableCellRenderer {
-
         private int percentage = 0;
 
         public ProgressBarRenderer() { setOpaque(true); }
@@ -618,19 +615,15 @@ public class UserDashboard extends JFrame {
             int barH   = 10;
             int y      = (getHeight() - barH) / 2;
 
-            // Gray background track
             g2.setColor(new Color(60, 60, 80));
             g2.fillRoundRect(pad, y, trackW, barH, barH, barH);
 
-            // Colored fill
             int fillW      = (int)(trackW * percentage / 100.0);
             Color barColor = percentage > 66 ? BTN_GREEN
-                    : percentage > 33 ? BTN_YELLOW
-                      : BTN_RED;
+                    : percentage > 33 ? BTN_YELLOW : BTN_RED;
             g2.setColor(barColor);
             if (fillW > 0) g2.fillRoundRect(pad, y, fillW, barH, barH, barH);
 
-            // Percentage text
             g2.setColor(TEXT_WHITE);
             g2.setFont(new Font("Segoe UI", Font.BOLD, 11));
             String txt = percentage + "%";
@@ -643,9 +636,9 @@ public class UserDashboard extends JFrame {
     }
 
     // ═══════════════════════════════════════════
-    //  MAIN  (test this form standalone)
+    //  MAIN
     // ═══════════════════════════════════════════
     public static void main(String[] args) {
-        SwingUtilities.invokeLater(() -> new UserDashboard("Fahad"));
+        SwingUtilities.invokeLater(() -> new UserDashboard(1, "Fahad", false));
     }
 }
