@@ -337,24 +337,28 @@ public class AdminDashboard extends JFrame {
     }
 
     // ═══════════════════════════════════════════
-    //  5. BUTTON ROW  (unchanged)
+    //  5. BUTTON ROW  ← ONLY CHANGE IN THIS FILE:
+    //     Added "Voter Confirmation" button (BTN_YELLOW)
+    //     before the Logout button
     // ═══════════════════════════════════════════
     private JPanel buildButtonRow() {
         JPanel btnRow = new JPanel(new FlowLayout(FlowLayout.CENTER, 12, 5));
         btnRow.setBackground(DARK_BG);
 
-        JButton btnAdd    = createButton("+ Add",      BTN_GREEN);
-        JButton btnUpdate = createButton("Edit",       BTN_YELLOW);
-        JButton btnRemove = createButton("Remove",     BTN_RED);
-        JButton btnPrev   = createButton("< Previous", BTN_CYAN);
-        JButton btnNext   = createButton("Next >",     BTN_CYAN);
-        JButton btnLogout = createButton("Logout",     BTN_RED);
+        JButton btnAdd    = createButton("+ Add",               BTN_GREEN);
+        JButton btnUpdate = createButton("Edit",                BTN_YELLOW);
+        JButton btnRemove = createButton("Remove",              BTN_RED);
+        JButton btnPrev   = createButton("< Previous",          BTN_CYAN);
+        JButton btnNext   = createButton("Next >",              BTN_CYAN);
+        JButton btnVoters = createButton("Voter Confirmation",  BTN_YELLOW);  // ← NEW
+        JButton btnLogout = createButton("Logout",              BTN_RED);
 
         btnAdd.addActionListener(e    -> doAdd());
         btnUpdate.addActionListener(e -> doUpdate());
         btnRemove.addActionListener(e -> doRemove());
         btnPrev.addActionListener(e   -> doPrev());
         btnNext.addActionListener(e   -> doNext());
+        btnVoters.addActionListener(e -> doVoterConfirmation()); // ← NEW
         btnLogout.addActionListener(e -> doLogout());
 
         btnRow.add(btnAdd);
@@ -364,6 +368,7 @@ public class AdminDashboard extends JFrame {
         btnRow.add(btnPrev);
         btnRow.add(btnNext);
         btnRow.add(Box.createHorizontalStrut(20));
+        btnRow.add(btnVoters);  // ← NEW
         btnRow.add(btnLogout);
         return btnRow;
     }
@@ -411,7 +416,7 @@ public class AdminDashboard extends JFrame {
             }
 
             if (dbAddCandidate(name, party, area)) {
-                loadCandidatesFromDB();   // reload array + linked list from DB
+                loadCandidatesFromDB();
                 refreshTable();
                 refreshStats();
                 setStatus("Candidate '" + name + "' added.", BTN_GREEN);
@@ -441,7 +446,7 @@ public class AdminDashboard extends JFrame {
             String area  = fArea.getText().trim();
 
             if (dbUpdateCandidate(id, name, party, area)) {
-                loadCandidatesFromDB();   // reload array + linked list from DB
+                loadCandidatesFromDB();
                 refreshTable();
                 refreshStats();
                 setStatus("Candidate updated.", BTN_YELLOW);
@@ -464,8 +469,8 @@ public class AdminDashboard extends JFrame {
             int id = (int) candidates[row][0];
 
             if (dbRemoveCandidate(id)) {
-                loadCandidatesFromDB();   // reload array + linked list from DB
-                currentIndex = 0;         // reset navigation after removal
+                loadCandidatesFromDB();
+                currentIndex = 0;
                 refreshTable();
                 refreshStats();
                 setStatus("'" + name + "' removed.", BTN_RED);
@@ -480,7 +485,6 @@ public class AdminDashboard extends JFrame {
         String query = searchField.getText().trim().toLowerCase();
         if (query.isEmpty()) { refreshTable(); return; }
 
-        // ← DSA: BinarySearch handles name (binary) + area (linear fallback)
         Object[][] results = BinarySearch.search(candidates, query);
 
         tableModel.setRowCount(0);
@@ -500,7 +504,6 @@ public class AdminDashboard extends JFrame {
     // ═══════════════════════════════════════════
     private void doPrev() {
         if (linkedList.size() == 0) return;
-        // ← DSA: circular prev index from linked list
         currentIndex = linkedList.prevIndex(currentIndex);
         selectRow(currentIndex);
         setStatus("Previous: " + candidates[currentIndex][1]
@@ -512,11 +515,19 @@ public class AdminDashboard extends JFrame {
     // ═══════════════════════════════════════════
     private void doNext() {
         if (linkedList.size() == 0) return;
-        // ← DSA: circular next index from linked list
         currentIndex = linkedList.nextIndex(currentIndex);
         selectRow(currentIndex);
         setStatus("Next: " + candidates[currentIndex][1]
                 + "  (" + (currentIndex + 1) + " / " + linkedList.size() + ")", BTN_CYAN);
+    }
+
+    // ═══════════════════════════════════════════
+    //  VOTER CONFIRMATION  ← NEW METHOD
+    //  Opens UserConfirmation form
+    // ═══════════════════════════════════════════
+    private void doVoterConfirmation() {
+        dispose();
+        new UserConfirmation();
     }
 
     // ═══════════════════════════════════════════
@@ -533,11 +544,10 @@ public class AdminDashboard extends JFrame {
 
     // ═══════════════════════════════════════════
     //  VIEW RESULTS  ← uses VoteSorter DSA class
-    //  (bonus: same pattern as UserDashboard)
     // ═══════════════════════════════════════════
     private void doViewResults() {
         Object[][] sorted = copyCandidates();
-        VoteSorter.bubbleSort(sorted);   // ← DSA: bubble sort descending
+        VoteSorter.bubbleSort(sorted);
 
         StringBuilder sb = new StringBuilder();
         sb.append("=== VOTE RESULTS (Sorted by Votes) ===\n\n");

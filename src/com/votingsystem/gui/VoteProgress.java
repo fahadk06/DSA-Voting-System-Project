@@ -4,6 +4,7 @@ import javax.swing.*;
 import javax.swing.border.*;
 import java.awt.*;
 import java.awt.event.*;
+import java.sql.*;
 
 public class VoteProgress extends JFrame {
 
@@ -27,31 +28,41 @@ public class VoteProgress extends JFrame {
     private static final Font FONT_BIG    = new Font("Segoe UI", Font.BOLD, 16);
 
     // ═══════════════════════════════════════════
-    //  CANDIDATE DATA
-    //  Format: {Name, Party, Area, Votes}
-    //  In real app this comes from shared data
+    //  USER INFO  ← passed from UserDashboard
     // ═══════════════════════════════════════════
-    private Object[][] candidates = {
-            {"Muhammad Ali",  "PTI",  "Rawalpindi", 342},
-            {"Sara Ahmed",    "PMLN", "Islamabad",  289},
-            {"Zain ul Abdin", "PPP",  "Lahore",     198},
-            {"Fatima Khan",   "MQM",  "Karachi",    415},
-            {"Omar Sheikh",   "PTI",  "Peshawar",   167},
-            {"Ayesha Raza",   "PMLN", "Multan",     231},
-    };
+    private int     loggedInUserId;
+    private String  loggedInUser;
+    private boolean hasVoted;
+
+    // ═══════════════════════════════════════════
+    //  CANDIDATE DATA  ← loaded from DB
+    //  Format: {id, name, party, area, vote_count}
+    // ═══════════════════════════════════════════
+    private Object[][] candidates = {};
 
     // ═══════════════════════════════════════════
     //  COMPONENTS
     // ═══════════════════════════════════════════
-    private JPanel  resultsPanel;  // holds all candidate result rows
-    private JLabel  statusLabel;
-    private JLabel  leaderLabel;
-    private JLabel  totalVotesLabel;
+    private JPanel resultsPanel;
+    private JLabel statusLabel;
+    private JLabel leaderLabel;
+    private JLabel totalVotesLabel;
 
     // ═══════════════════════════════════════════
-    //  CONSTRUCTOR
+    //  CONSTRUCTOR  (no-arg — standalone test)
     // ═══════════════════════════════════════════
     public VoteProgress() {
+        this(0, "Guest", false);
+    }
+
+    // ═══════════════════════════════════════════
+    //  CONSTRUCTOR  ← called from UserDashboard
+    // ═══════════════════════════════════════════
+    public VoteProgress(int userId, String userName, boolean voted) {
+        this.loggedInUserId = userId;
+        this.loggedInUser   = userName;
+        this.hasVoted       = voted;
+
         setTitle("Vote Progress - Online Voting System");
         setSize(700, 680);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -61,23 +72,58 @@ public class VoteProgress extends JFrame {
         getContentPane().setBackground(DARK_BG);
         setLayout(new BorderLayout(0, 0));
 
-        add(buildTopBar(),     BorderLayout.NORTH);
-        add(buildCenter(),     BorderLayout.CENTER);
-        add(buildBottomBar(),  BorderLayout.SOUTH);
+        loadCandidatesFromDB();   // ← load real DB data
+
+        add(buildTopBar(),    BorderLayout.NORTH);
+        add(buildCenter(),    BorderLayout.CENTER);
+        add(buildBottomBar(), BorderLayout.SOUTH);
 
         setVisible(true);
     }
 
     // ═══════════════════════════════════════════
+    //  DB — LOAD CANDIDATES
+    //  Reads: id, name, party, area, vote_count
+    //  from candidates table — matches your schema
+    // ═══════════════════════════════════════════
+    private void loadCandidatesFromDB() {
+        try {
+            Connection conn = com.votingsystem.database.DBConnection.getConnection();
+            if (conn == null) return;
+
+            Statement st = conn.createStatement();
+            ResultSet rs = st.executeQuery(
+                    "SELECT id, name, party, area, vote_count FROM candidates ORDER BY id");
+
+            java.util.List<Object[]> list = new java.util.ArrayList<>();
+            while (rs.next()) {
+                list.add(new Object[]{
+                        rs.getInt("id"),
+                        rs.getString("name"),
+                        rs.getString("party"),
+                        rs.getString("area"),
+                        rs.getInt("vote_count")
+                });
+            }
+            rs.close();
+            st.close();
+
+            candidates = list.toArray(new Object[0][]);
+
+        } catch (SQLException e) {
+            e.printStackTrace();
+            candidates = new Object[][]{};
+        }
+    }
+
+    // ═══════════════════════════════════════════
     //  1. TOP BAR
-    //     Title + subtitle
     // ═══════════════════════════════════════════
     private JPanel buildTopBar() {
         JPanel bar = new JPanel(new BorderLayout());
         bar.setBackground(PANEL_BG);
         bar.setBorder(new EmptyBorder(18, 25, 18, 25));
 
-        // Left: Title
         JPanel leftSide = new JPanel();
         leftSide.setBackground(PANEL_BG);
         leftSide.setLayout(new BoxLayout(leftSide, BoxLayout.Y_AXIS));
@@ -94,7 +140,6 @@ public class VoteProgress extends JFrame {
         leftSide.add(Box.createVerticalStrut(3));
         leftSide.add(subtitle);
 
-        // Right: Total votes info
         JPanel rightSide = new JPanel();
         rightSide.setBackground(PANEL_BG);
         rightSide.setLayout(new BoxLayout(rightSide, BoxLayout.Y_AXIS));
@@ -119,41 +164,39 @@ public class VoteProgress extends JFrame {
 
     // ═══════════════════════════════════════════
     //  2. CENTER
-    //     Leader card on top + results list below
     // ═══════════════════════════════════════════
     private JPanel buildCenter() {
         JPanel center = new JPanel(new BorderLayout(0, 14));
         center.setBackground(DARK_BG);
         center.setBorder(new EmptyBorder(16, 20, 10, 20));
 
-        center.add(buildLeaderCard(),   BorderLayout.NORTH);
-        center.add(buildResultsList(),  BorderLayout.CENTER);
+        center.add(buildLeaderCard(),  BorderLayout.NORTH);
+        center.add(buildResultsList(), BorderLayout.CENTER);
 
         return center;
     }
 
     // ═══════════════════════════════════════════
     //  3. LEADER CARD
-    //     Highlights the winning candidate
     // ═══════════════════════════════════════════
     private JPanel buildLeaderCard() {
-        // Sort to find leader
-        Object[][] sorted = getSortedCandidates();
-        String leaderName  = (String) sorted[0][0];
-        String leaderParty = (String) sorted[0][1];
-        int    leaderVotes = (int)    sorted[0][3];
+        Object[][] sorted  = getSortedCandidates();
+
+        // Safe defaults if no candidates loaded
+        String leaderName  = sorted.length > 0 ? (String) sorted[0][1] : "None";
+        String leaderParty = sorted.length > 0 ? (String) sorted[0][2] : "";
+        int    leaderVotes = sorted.length > 0 ? (int)    sorted[0][4] : 0;
         int    totalVotes  = calcTotalVotes();
         int    leaderPct   = totalVotes > 0 ? leaderVotes * 100 / totalVotes : 0;
 
         JPanel card = new JPanel(new BorderLayout(15, 0));
-        card.setBackground(new Color(55, 65, 40));  // dark green tint for winner
+        card.setBackground(new Color(55, 65, 40));
         card.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createLineBorder(BTN_GREEN, 2),
                 new EmptyBorder(16, 22, 16, 22)
         ));
         card.setPreferredSize(new Dimension(0, 85));
 
-        // Left: trophy + name
         JPanel leftPanel = new JPanel();
         leftPanel.setOpaque(false);
         leftPanel.setLayout(new BoxLayout(leftPanel, BoxLayout.Y_AXIS));
@@ -176,7 +219,6 @@ public class VoteProgress extends JFrame {
         leftPanel.add(Box.createVerticalStrut(2));
         leftPanel.add(pctLabel);
 
-        // Right: vote count
         JPanel rightPanel = new JPanel();
         rightPanel.setOpaque(false);
         rightPanel.setLayout(new BoxLayout(rightPanel, BoxLayout.Y_AXIS));
@@ -201,24 +243,20 @@ public class VoteProgress extends JFrame {
 
     // ═══════════════════════════════════════════
     //  4. RESULTS LIST
-    //     One row per candidate, sorted by votes
-    //     Each row has: Rank | Name | Party | Bar | Votes
     // ═══════════════════════════════════════════
     private JScrollPane buildResultsList() {
         resultsPanel = new JPanel();
         resultsPanel.setBackground(DARK_BG);
         resultsPanel.setLayout(new BoxLayout(resultsPanel, BoxLayout.Y_AXIS));
 
-        // Sort candidates by votes using Bubble Sort (DSA)
         Object[][] sorted = getSortedCandidates();
-        int maxVotes = (int) sorted[0][3]; // highest votes after sort
+        int maxVotes = sorted.length > 0 ? (int) sorted[0][4] : 0;
 
-        // Build one row for each candidate
         for (int i = 0; i < sorted.length; i++) {
-            String name  = (String) sorted[i][0];
-            String party = (String) sorted[i][1];
-            String area  = (String) sorted[i][2];
-            int    votes = (int)    sorted[i][3];
+            String name  = (String) sorted[i][1];
+            String party = (String) sorted[i][2];
+            String area  = (String) sorted[i][3];
+            int    votes = (int)    sorted[i][4];
             int    pct   = maxVotes > 0 ? votes * 100 / maxVotes : 0;
             int    rank  = i + 1;
 
@@ -236,12 +274,10 @@ public class VoteProgress extends JFrame {
 
     // ═══════════════════════════════════════════
     //  ONE CANDIDATE ROW
-    //  Rank | Name + Party + Area | Progress Bar | Votes
     // ═══════════════════════════════════════════
     private JPanel buildCandidateRow(int rank, String name, String party,
                                      String area, int votes, int pct) {
 
-        // Pick color based on rank
         Color rankColor = rank == 1 ? BTN_GREEN
                 : rank == 2 ? BTN_CYAN
                   : rank == 3 ? BTN_YELLOW
@@ -256,27 +292,22 @@ public class VoteProgress extends JFrame {
                 new EmptyBorder(10, 16, 10, 16)
         ));
 
-        // ── LEFT: Rank number
         JLabel rankLabel = new JLabel("#" + rank, SwingConstants.CENTER);
         rankLabel.setFont(new Font("Segoe UI", Font.BOLD, 18));
         rankLabel.setForeground(rankColor);
         rankLabel.setPreferredSize(new Dimension(40, 0));
 
-        // ── CENTER: Name, Party, Area + Progress bar
         JPanel centerPanel = new JPanel();
         centerPanel.setOpaque(false);
         centerPanel.setLayout(new BoxLayout(centerPanel, BoxLayout.Y_AXIS));
 
-        // Name + Party
         JLabel nameLabel = new JLabel(name + "  |  " + party + "  |  " + area);
         nameLabel.setFont(FONT_LABEL);
         nameLabel.setForeground(TEXT_WHITE);
 
-        // Progress bar (custom drawn)
         JPanel progressBar = buildProgressBar(pct, rankColor);
         progressBar.setMaximumSize(new Dimension(Integer.MAX_VALUE, 12));
 
-        // Percentage text
         JLabel pctLabel = new JLabel(pct + "% relative to leader");
         pctLabel.setFont(FONT_SMALL);
         pctLabel.setForeground(TEXT_GRAY);
@@ -287,7 +318,6 @@ public class VoteProgress extends JFrame {
         centerPanel.add(Box.createVerticalStrut(2));
         centerPanel.add(pctLabel);
 
-        // ── RIGHT: Vote count
         JLabel voteLabel = new JLabel(String.valueOf(votes), SwingConstants.RIGHT);
         voteLabel.setFont(new Font("Segoe UI", Font.BOLD, 20));
         voteLabel.setForeground(rankColor);
@@ -303,9 +333,9 @@ public class VoteProgress extends JFrame {
         rightPanel.add(voteLabel);
         rightPanel.add(votesText);
 
-        row.add(rankLabel,    BorderLayout.WEST);
-        row.add(centerPanel,  BorderLayout.CENTER);
-        row.add(rightPanel,   BorderLayout.EAST);
+        row.add(rankLabel,   BorderLayout.WEST);
+        row.add(centerPanel, BorderLayout.CENTER);
+        row.add(rightPanel,  BorderLayout.EAST);
 
         return row;
     }
@@ -322,17 +352,14 @@ public class VoteProgress extends JFrame {
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
                         RenderingHints.VALUE_ANTIALIAS_ON);
 
-                // Gray background track
                 g2.setColor(new Color(60, 60, 80));
                 g2.fillRoundRect(0, 0, getWidth(), getHeight(), 8, 8);
 
-                // Colored fill based on percentage
                 int fillW = (int)(getWidth() * pct / 100.0);
                 g2.setColor(barColor);
                 if (fillW > 0) {
                     g2.fillRoundRect(0, 0, fillW, getHeight(), 8, 8);
                 }
-
                 g2.dispose();
             }
         };
@@ -343,27 +370,25 @@ public class VoteProgress extends JFrame {
 
     // ═══════════════════════════════════════════
     //  5. BOTTOM BAR
-    //     Refresh + Back buttons + status
     // ═══════════════════════════════════════════
     private JPanel buildBottomBar() {
         JPanel bar = new JPanel(new BorderLayout());
         bar.setBackground(PANEL_BG);
         bar.setBorder(new EmptyBorder(10, 20, 10, 20));
 
-        // Left: status label
         statusLabel = new JLabel("Results sorted by votes (Bubble Sort)");
         statusLabel.setFont(FONT_SMALL);
         statusLabel.setForeground(TEXT_GRAY);
 
-        // Right: buttons
         JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
         btnPanel.setBackground(PANEL_BG);
 
         JButton btnRefresh = createButton("Refresh", BTN_BLUE);
         JButton btnBack    = createButton("Back",     BTN_RED);
 
-        // Refresh reloads the results panel
+        // Refresh: reload from DB then rebuild UI
         btnRefresh.addActionListener(e -> {
+            loadCandidatesFromDB();
             getContentPane().removeAll();
             add(buildTopBar(),    BorderLayout.NORTH);
             add(buildCenter(),    BorderLayout.CENTER);
@@ -373,10 +398,10 @@ public class VoteProgress extends JFrame {
             setStatus("Results refreshed!", BTN_GREEN);
         });
 
-        // Back goes to UserDashboard
+        // Back: return to UserDashboard with same user session
         btnBack.addActionListener(e -> {
             dispose();
-            //new UserDashboard("User");
+            new UserDashboard(loggedInUserId, loggedInUser, hasVoted);
         });
 
         btnPanel.add(btnRefresh);
@@ -389,21 +414,18 @@ public class VoteProgress extends JFrame {
 
     // ═══════════════════════════════════════════
     //  DSA — BUBBLE SORT (descending by votes)
-    //  Sorts candidates from highest to lowest votes
+    //  Uses index [4] = vote_count (matches DB schema)
     // ═══════════════════════════════════════════
     private Object[][] getSortedCandidates() {
-        // Deep copy so original data is not changed
-        Object[][] sorted = new Object[candidates.length][4];
+        Object[][] sorted = new Object[candidates.length][];
         for (int i = 0; i < candidates.length; i++) {
             sorted[i] = candidates[i].clone();
         }
 
-        // Bubble Sort — compare adjacent, swap if out of order
         int n = sorted.length;
         for (int i = 0; i < n - 1; i++) {
             for (int j = 0; j < n - i - 1; j++) {
-                if ((int) sorted[j][3] < (int) sorted[j + 1][3]) {
-                    // Swap
+                if ((int) sorted[j][4] < (int) sorted[j + 1][4]) {
                     Object[] temp  = sorted[j];
                     sorted[j]      = sorted[j + 1];
                     sorted[j + 1]  = temp;
@@ -414,24 +436,21 @@ public class VoteProgress extends JFrame {
     }
 
     // ═══════════════════════════════════════════
-    //  HELPER METHODS
+    //  HELPERS
     // ═══════════════════════════════════════════
-
-    // Sum all votes
     private int calcTotalVotes() {
         int total = 0;
-        for (Object[] c : candidates) total += (int) c[3];
+        for (Object[] c : candidates) total += (int) c[4];
         return total;
     }
 
-    // Update status bar text
     private void setStatus(String msg, Color color) {
         statusLabel.setText(msg);
         statusLabel.setForeground(color);
     }
 
     // ═══════════════════════════════════════════
-    //  BUTTON FACTORY  (same as all other forms)
+    //  BUTTON FACTORY
     // ═══════════════════════════════════════════
     private JButton createButton(String text, Color color) {
         JButton btn = new JButton(text);
@@ -452,7 +471,7 @@ public class VoteProgress extends JFrame {
     }
 
     // ═══════════════════════════════════════════
-    //  MAIN  (test this form standalone)
+    //  MAIN  (standalone test)
     // ═══════════════════════════════════════════
     public static void main(String[] args) {
         SwingUtilities.invokeLater(VoteProgress::new);

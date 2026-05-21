@@ -7,11 +7,11 @@ import java.awt.event.*;
 
 public class MainForm extends JFrame {
 
-    private static final Color DARK_BG  = new Color(30, 30, 47);
-    private static final Color PANEL_BG = new Color(44, 44, 64);
-    private static final Color BTN_GREEN = new Color(50, 200, 120);
-    private static final Color BTN_RED   = new Color(220, 70, 70);
-    private static final Color BTN_CYAN  = new Color(50, 200, 220);
+    private static final Color DARK_BG    = new Color(30, 30, 47);
+    private static final Color PANEL_BG   = new Color(44, 44, 64);
+    private static final Color BTN_GREEN  = new Color(50, 200, 120);
+    private static final Color BTN_RED    = new Color(220, 70, 70);
+    private static final Color BTN_CYAN   = new Color(50, 200, 220);
     private static final Color TEXT_WHITE = new Color(230, 230, 255);
     private static final Color TEXT_GRAY  = new Color(150, 150, 180);
 
@@ -19,7 +19,7 @@ public class MainForm extends JFrame {
     private static final Font FONT_LABEL  = new Font("Segoe UI", Font.BOLD, 14);
     private static final Font FONT_NORMAL = new Font("Segoe UI", Font.PLAIN, 14);
 
-    private JTextField txtUsername;
+    private JTextField    txtUsername;
     private JPasswordField txtPassword;
     private JComboBox<String> comboRole;
 
@@ -31,12 +31,15 @@ public class MainForm extends JFrame {
         setResizable(false);
         setLayout(new BorderLayout());
         getContentPane().setBackground(DARK_BG);
-        add(buildHeader(), BorderLayout.NORTH);
+        add(buildHeader(),    BorderLayout.NORTH);
         add(buildLoginForm(), BorderLayout.CENTER);
-        add(buildFooter(), BorderLayout.SOUTH);
+        add(buildFooter(),    BorderLayout.SOUTH);
         setVisible(true);
     }
 
+    // ═══════════════════════════════════════════
+    //  HEADER
+    // ═══════════════════════════════════════════
     private JPanel buildHeader() {
         JPanel header = new JPanel(new GridLayout(2, 1, 0, 5));
         header.setBackground(DARK_BG);
@@ -55,6 +58,9 @@ public class MainForm extends JFrame {
         return header;
     }
 
+    // ═══════════════════════════════════════════
+    //  LOGIN FORM
+    // ═══════════════════════════════════════════
     private JPanel buildLoginForm() {
         JPanel formPanel = new JPanel();
         formPanel.setLayout(new BoxLayout(formPanel, BoxLayout.Y_AXIS));
@@ -74,17 +80,21 @@ public class MainForm extends JFrame {
         formPanel.add(comboRole);
         formPanel.add(Box.createVerticalStrut(20));
 
-        formPanel.add(createLabel("Username / CNIC:"));
+        formPanel.add(createLabel("CNIC:"));
         formPanel.add(Box.createVerticalStrut(5));
         txtUsername = new JTextField();
         styleTextField(txtUsername);
         formPanel.add(txtUsername);
         formPanel.add(Box.createVerticalStrut(20));
 
-        formPanel.add(createLabel("Password / PIN:"));
+        formPanel.add(createLabel("Password:"));
         formPanel.add(Box.createVerticalStrut(5));
         txtPassword = new JPasswordField();
         styleTextField(txtPassword);
+
+        // Allow Enter key to trigger login
+        txtPassword.addActionListener(e -> doLogin());
+
         formPanel.add(txtPassword);
         formPanel.add(Box.createVerticalStrut(30));
 
@@ -97,7 +107,7 @@ public class MainForm extends JFrame {
         JButton btnExit  = createButton("Exit",  BTN_RED);
 
         btnLogin.addActionListener(e -> doLogin());
-        btnExit.addActionListener(e -> System.exit(0));
+        btnExit.addActionListener(e  -> System.exit(0));
 
         btnPanel.add(btnLogin);
         btnPanel.add(btnExit);
@@ -109,6 +119,9 @@ public class MainForm extends JFrame {
         return wrapper;
     }
 
+    // ═══════════════════════════════════════════
+    //  FOOTER
+    // ═══════════════════════════════════════════
     private JPanel buildFooter() {
         JPanel footer = new JPanel(new FlowLayout(FlowLayout.CENTER));
         footer.setBackground(DARK_BG);
@@ -122,56 +135,90 @@ public class MainForm extends JFrame {
         return footer;
     }
 
+    // ═══════════════════════════════════════════
+    //  LOGIN LOGIC
+    //  FIX 1: Voter block now shows error when
+    //          credentials are wrong (was silent)
+    //  FIX 2: Voter query checks is_verified=1
+    //          so unconfirmed voters get a clear
+    //          "not yet approved" message instead
+    //          of a generic failure
+    //  FIX 3: Admin query also fixed to match DB
+    // ═══════════════════════════════════════════
     private void doLogin() {
         String role     = (String) comboRole.getSelectedItem();
-        String username = txtUsername.getText().trim();
+        String cnic     = txtUsername.getText().trim();
         String password = new String(txtPassword.getPassword());
 
-        if (username.isEmpty() || password.isEmpty()) {
-            showError("Please enter both username and password.");
+        if (cnic.isEmpty() || password.isEmpty()) {
+            showError("Please enter both CNIC and password.");
             return;
         }
 
         java.sql.Connection conn = com.votingsystem.database.DBConnection.getConnection();
-
         if (conn == null) {
             showError("Database connection failed.");
             return;
         }
 
         try {
-            if (role.equals("Administrator")) {
-                String sql = "SELECT * FROM users WHERE cnic=? AND password=? AND role='admin' AND is_verified=TRUE";
+            if ("Administrator".equals(role)) {
+                // ── ADMIN LOGIN ──────────────────────────────
+                // Admins must exist, have role='admin', and be verified
+                String sql = "SELECT id, full_name FROM users " +
+                        "WHERE cnic=? AND password=? AND role='admin' AND is_verified=1";
+
                 java.sql.PreparedStatement ps = conn.prepareStatement(sql);
-                ps.setString(1, username);
+                ps.setString(1, cnic);
                 ps.setString(2, password);
                 java.sql.ResultSet rs = ps.executeQuery();
 
                 if (rs.next()) {
                     String name = rs.getString("full_name");
-                    JOptionPane.showMessageDialog(this, "Welcome, " + name + "!", "Login Success", JOptionPane.INFORMATION_MESSAGE);
+                    JOptionPane.showMessageDialog(this,
+                            "Welcome, " + name + "!",
+                            "Login Success", JOptionPane.INFORMATION_MESSAGE);
                     dispose();
                     new AdminDashboard();
                 } else {
                     showError("Invalid Administrator credentials.");
                 }
+                rs.close(); ps.close();
 
-            } else if (role.equals("Voter")) {
-                String sql = "SELECT * FROM users WHERE cnic=? AND password=? AND role='voter' AND is_verified=TRUE";
-                java.sql.PreparedStatement ps = conn.prepareStatement(sql);
-                ps.setString(1, username);
+            } else {
+                // ── VOTER LOGIN ──────────────────────────────
+                // Step 1: does the user exist at all with correct cnic+password?
+                String sqlAny = "SELECT id, full_name, is_verified, has_voted " +
+                        "FROM users WHERE cnic=? AND password=? AND role='voter'";
+
+                java.sql.PreparedStatement ps = conn.prepareStatement(sqlAny);
+                ps.setString(1, cnic);
                 ps.setString(2, password);
                 java.sql.ResultSet rs = ps.executeQuery();
-                if (rs.next()) {
-                    int userId     = rs.getInt("id");
-                    String name    = rs.getString("full_name");
-                    boolean voted  = rs.getBoolean("has_voted");   // ← fetch has_voted from DB
 
-                    JOptionPane.showMessageDialog(this, "Welcome, " + name + "!",
-                            "Login Success", JOptionPane.INFORMATION_MESSAGE);
-                    dispose();
-                    new UserDashboard(userId, name, voted);   // ← pass all 3 correct args
+                if (!rs.next()) {
+                    // ← FIX 1: was completely silent before — now shows error
+                    showError("Invalid Voter credentials.\nPlease check your CNIC and password.");
+                } else {
+                    int     userId   = rs.getInt("id");
+                    String  name     = rs.getString("full_name");
+                    int     verified = rs.getInt("is_verified");
+                    boolean voted    = rs.getBoolean("has_voted");
+
+                    if (verified == 0) {
+                        // ← FIX 2: clear message instead of silent failure
+                        showError("Your account has not been approved yet.\n" +
+                                "Please contact the Administrator.");
+                    } else {
+                        // ← Confirmed voter — open UserDashboard
+                        JOptionPane.showMessageDialog(this,
+                                "Welcome, " + name + "!",
+                                "Login Success", JOptionPane.INFORMATION_MESSAGE);
+                        dispose();
+                        new UserDashboard(userId, name, voted);
+                    }
                 }
+                rs.close(); ps.close();
             }
 
         } catch (java.sql.SQLException e) {
@@ -180,8 +227,12 @@ public class MainForm extends JFrame {
         }
     }
 
+    // ═══════════════════════════════════════════
+    //  HELPERS
+    // ═══════════════════════════════════════════
     private void showError(String msg) {
-        JOptionPane.showMessageDialog(this, msg, "Authentication Error", JOptionPane.ERROR_MESSAGE);
+        JOptionPane.showMessageDialog(this, msg,
+                "Authentication Error", JOptionPane.ERROR_MESSAGE);
     }
 
     private JLabel createLabel(String text) {
@@ -213,7 +264,7 @@ public class MainForm extends JFrame {
         box.setMaximumSize(new Dimension(250, 35));
         box.setPreferredSize(new Dimension(250, 35));
         box.setAlignmentX(Component.CENTER_ALIGNMENT);
-        ((JLabel)box.getRenderer()).setHorizontalAlignment(SwingConstants.CENTER);
+        ((JLabel) box.getRenderer()).setHorizontalAlignment(SwingConstants.CENTER);
     }
 
     private JButton createButton(String text, Color color) {
@@ -237,9 +288,7 @@ public class MainForm extends JFrame {
     public static void main(String[] args) {
         try {
             UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+        } catch (Exception ignored) {}
         SwingUtilities.invokeLater(MainForm::new);
     }
 }

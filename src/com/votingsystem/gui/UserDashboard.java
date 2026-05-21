@@ -56,7 +56,7 @@ public class UserDashboard extends JFrame {
     private int currentIndex = 0;
 
     // ═══════════════════════════════════════════
-    //  CONSTRUCTOR  ← fixed: 3 params
+    //  CONSTRUCTOR
     // ═══════════════════════════════════════════
     public UserDashboard(int userId, String userName, boolean voted) {
         this.loggedInUserId = userId;
@@ -197,7 +197,6 @@ public class UserDashboard extends JFrame {
         lblTotalVotes      = new JLabel(String.valueOf(calcTotalVotes()));
         lblLeader          = new JLabel(calcLeader());
 
-        // ← vote status comes from DB now
         lblVoteStatus = new JLabel(hasVoted ? "Voted!" : "Not Voted");
         lblVoteStatus.setForeground(hasVoted ? BTN_GREEN : BTN_RED);
 
@@ -302,7 +301,7 @@ public class UserDashboard extends JFrame {
         JButton btnLogout  = createButton("Logout",       BTN_RED);
 
         btnVote.addActionListener(e    -> doCastVote());
-        btnResults.addActionListener(e -> doViewResults());
+        btnResults.addActionListener(e -> doViewResults());  // ← ONLY CHANGE
         btnPrev.addActionListener(e    -> doPrev());
         btnNext.addActionListener(e    -> doNext());
         btnLogout.addActionListener(e  -> doLogout());
@@ -370,26 +369,22 @@ public class UserDashboard extends JFrame {
                 Connection conn = com.votingsystem.database.DBConnection.getConnection();
                 if (conn == null) { showError("DB connection failed."); return; }
 
-                // 1. Increment vote_count in candidates
                 PreparedStatement ps1 = conn.prepareStatement(
                         "UPDATE candidates SET vote_count = vote_count + 1 WHERE id = ?");
                 ps1.setInt(1, candidateId);
                 ps1.executeUpdate();
 
-                // 2. Mark user has_voted = TRUE
                 PreparedStatement ps2 = conn.prepareStatement(
                         "UPDATE users SET has_voted = TRUE WHERE id = ?");
                 ps2.setInt(1, loggedInUserId);
                 ps2.executeUpdate();
 
-                // 3. Insert record into votes table
                 PreparedStatement ps3 = conn.prepareStatement(
                         "INSERT INTO votes (user_id, candidate_id) VALUES (?, ?)");
                 ps3.setInt(1, loggedInUserId);
                 ps3.setInt(2, candidateId);
                 ps3.executeUpdate();
 
-                // 4. Update local array + UI
                 candidates[row][4] = (int) candidates[row][4] + 1;
                 hasVoted = true;
 
@@ -412,35 +407,11 @@ public class UserDashboard extends JFrame {
     }
 
     // ═══════════════════════════════════════════
-    //  VIEW RESULTS
+    //  VIEW RESULTS  ← ONLY CHANGE: opens VoteProgress
     // ═══════════════════════════════════════════
     private void doViewResults() {
-        Object[][] sorted = copyCandidates();
-        bubbleSortByVotes(sorted);
-
-        StringBuilder sb = new StringBuilder();
-        sb.append("=== VOTE RESULTS (Sorted by Votes) ===\n\n");
-
-        for (int i = 0; i < sorted.length; i++) {
-            sb.append((i + 1)).append(".  ")
-                    .append(sorted[i][1]).append("  (").append(sorted[i][2]).append(")")
-                    .append("  -  ").append(sorted[i][4]).append(" votes");
-            if (i == 0) sb.append("  LEADING");
-            sb.append("\n");
-        }
-
-        JTextArea textArea = new JTextArea(sb.toString());
-        textArea.setFont(new Font("Consolas", Font.PLAIN, 13));
-        textArea.setEditable(false);
-        textArea.setBackground(PANEL_BG);
-        textArea.setForeground(TEXT_WHITE);
-        textArea.setBorder(new EmptyBorder(10, 10, 10, 10));
-
-        JScrollPane scroll = new JScrollPane(textArea);
-        scroll.setPreferredSize(new Dimension(420, 280));
-
-        JOptionPane.showMessageDialog(this, scroll,
-                "Election Results", JOptionPane.PLAIN_MESSAGE);
+        dispose();
+        new VoteProgress(loggedInUserId, loggedInUser, hasVoted);
     }
 
     // ═══════════════════════════════════════════
@@ -498,7 +469,7 @@ public class UserDashboard extends JFrame {
     }
 
     // ═══════════════════════════════════════════
-    //  BUBBLE SORT — DSA (will move to VoteSorter)
+    //  BUBBLE SORT — DSA
     // ═══════════════════════════════════════════
     private void bubbleSortByVotes(Object[][] arr) {
         int n = arr.length;
